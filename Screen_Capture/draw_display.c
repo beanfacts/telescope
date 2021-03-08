@@ -99,7 +99,6 @@ int run(Display* dsp, Window window, struct shmimage* src, struct shmimage* dst)
             getrootwindow(dsp, src);
             getframe(src, dst);
             XShmPutImage(dsp, window, gc, dst->ximage, 0, 0, 0, 0, dstwidth, dstheight, False);
-            usleep(1000000/50);
             ++frames;
             int periodus = timestamp() - periodts;
             if(periodus >= 1000000)
