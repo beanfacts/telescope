@@ -12,11 +12,11 @@
 #include "screencap.c"
 #include "screen_struc.h"
 #ifdef __linux__
-    #include <sys/time.h>
+#include <sys/time.h>
 #endif
 
-#include <sys/socket.h> 
-#include <sys/types.h> 
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <arpa/inet.h>
 
 #define NAME   "Screen Capture"
@@ -28,51 +28,51 @@
 
 long timestamp( )
 {
-   struct timeval tv ;
+    struct timeval tv ;
 
-   gettimeofday( &tv, NULL ) ;
-   return tv.tv_sec*1000000L + tv.tv_usec ;
+    gettimeofday( &tv, NULL ) ;
+    return tv.tv_sec*1000000L + tv.tv_usec ;
 }
-int sock_create(int arr[]) 
-{ 
-    int sockfd, connfd, len; 
+int sock_create(int arr[])
+{
+    int sockfd, connfd, len;
     struct sockaddr_in servaddr, cli;
-    sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-    if (sockfd == -1) { 
-        printf("socket creation failed...\n"); 
-        exit(0); 
-    } 
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        printf("socket creation failed...\n");
+        exit(0);
+    }
     else
-        printf("Socket successfully created..\n"); 
-    bzero(&servaddr, sizeof(servaddr)); 
-    servaddr.sin_family = AF_INET; 
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
+        printf("Socket successfully created..\n");
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     servaddr.sin_port = htons(PORT);
-    if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
-        printf("socket bind failed...\n"); 
-        exit(0); 
-    } 
+    if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
+        printf("socket bind failed...\n");
+        exit(0);
+    }
     else
-        printf("Socket successfully binded..\n"); 
-    if ((listen(sockfd, 5)) != 0) { 
-        printf("Listen failed...\n"); 
-        exit(0); 
-    } 
+        printf("Socket successfully binded..\n");
+    if ((listen(sockfd, 5)) != 0) {
+        printf("Listen failed...\n");
+        exit(0);
+    }
     else
-        printf("Server listening..\n"); 
+        printf("Server listening..\n");
     len = sizeof(cli);
-    connfd = accept(sockfd, (SA*)&cli, &len); 
-    if (connfd < 0) { 
-        printf("server acccept failed...\n"); 
-        exit(0); 
-    } 
+    connfd = accept(sockfd, (SA*)&cli, &len);
+    if (connfd < 0) {
+        printf("server acccept failed...\n");
+        exit(0);
+    }
     else
-        printf("server acccept the client...\n"); 
+        printf("server acccept the client...\n");
     arr[0] = connfd;
     arr[1] = sockfd;
-    // func(connfd); 
+    // func(connfd);
     return arr;
-} 
+}
 
 Window createwindow( Display * dsp, int width, int height )
 {
@@ -81,9 +81,9 @@ Window createwindow( Display * dsp, int width, int height )
     attributes.backing_store = NotUseful ;
     mask |= CWBackingStore ;
     Window window = XCreateWindow( dsp, DefaultRootWindow( dsp ),
-            0, 0, width, height, 0,
-            DefaultDepth( dsp, XDefaultScreen( dsp ) ),
-            InputOutput, CopyFromParent, mask, &attributes ) ;
+                                   0, 0, width, height, 0,
+                                   DefaultDepth( dsp, XDefaultScreen( dsp ) ),
+                                   InputOutput, CopyFromParent, mask, &attributes ) ;
     XStoreName( dsp, window, NAME );
     XSelectInput( dsp, window, StructureNotifyMask ) ;
     XMapWindow( dsp, window );
@@ -95,44 +95,24 @@ void destroywindow( Display * dsp, Window window )
     XDestroyWindow( dsp, window );
 }
 
-int run( Display * dsp, Window window, struct shmimage * src, struct shmimage * dst , int screen_no, int screen_width, int connfd)
+int run( Display * dsp, struct shmimage * src, struct shmimage * dst , int screen_no, int screen_width, int connfd)
 {
-    XGCValues xgcvalues ;
-    xgcvalues.graphics_exposures = False ;
-    GC gc = XCreateGC( dsp, window, GCGraphicsExposures, &xgcvalues ) ;
+    //XGCValues xgcvalues ;
+    //xgcvalues.graphics_exposures = False ;
+    //GC gc = XCreateGC( dsp, window, GCGraphicsExposures, &xgcvalues ) ;
 
-    Atom delete_atom = XInternAtom( dsp, "WM_DELETE_WINDOW", False ) ;
-    XSetWMProtocols( dsp, window, &delete_atom, True ) ;
+    //Atom delete_atom = XInternAtom( dsp, "WM_DELETE_WINDOW", False ) ;
+    //XSetWMProtocols( dsp, window, &delete_atom, True ) ;
 
     XEvent xevent ;
     int running = true ;
-    int initialized = false ;
+    int initialized = true ;
     int dstwidth = dst->ximage->width ;
     int dstheight = dst->ximage->height ;
-    long framets = timestamp( ) ;
-    long periodts = timestamp( ) ;
-    long frames = 0 ;
     int fd = ConnectionNumber( dsp ) ;
     while( running )
     {
-        while( XPending( dsp ) )
-        {
-            XNextEvent( dsp, &xevent ) ;
-            if( ( xevent.type == ClientMessage && xevent.xclient.data.l[0] == delete_atom )
-                || xevent.type == DestroyNotify )
-            {
-                running = false ;
-                break ;
-            }
-            else if( xevent.type == ConfigureNotify )
-            {
-                if( xevent.xconfigure.width == dstwidth
-                    && xevent.xconfigure.height == dstheight )
-                {
-                    initialized = true ;
-                }
-            }
-        }
+
         if( initialized )
         {
             getrootwindow( dsp, src ,screen_no, screen_width) ;
@@ -140,12 +120,11 @@ int run( Display * dsp, Window window, struct shmimage * src, struct shmimage * 
             {
                 return false ;
             }
-            XShmPutImage( dsp, window, gc, dst->ximage, 0, 0, 0, 0, dstwidth, dstheight, False ) ;
             int size = (dst->ximage->height)*(dst->ximage->width)*((dst->ximage->bits_per_pixel)/8);
             write(connfd,dst->ximage->data,size);
             XSync( dsp, False ) ;
 
-        
+
         }
     }
     return true ;
@@ -212,13 +191,11 @@ int main( int argc, char * argv[] )
         return 1 ;
     }
 
-    Window window = createwindow( dsp, dstwidth, dstheight ) ;
-    run( dsp, window, &src, &dst , screen_no, width, arr[0]) ;
-    destroywindow( dsp, window ) ;  
+    run( dsp, &src, &dst , screen_no, width, arr[0]) ;
 
     destroyimage( dsp, &src ) ;
     destroyimage( dsp, &dst ) ;
-    close(arr[1]); 
+    close(arr[1]);
     XCloseDisplay( dsp ) ;
     return 0 ;
 }
