@@ -222,9 +222,8 @@ int main(int argc, char *argv[])
 			{
 			case XCB_MOTION_NOTIFY:{
 			xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)event;
-			
-
-			new_x = motion->event_x;	
+			get_center(connection, window, &cenx, &ceny);
+            new_x = motion->event_x;	
 			new_y = motion->event_y;
 
 			deltax = new_x - pre_x;
@@ -232,16 +231,17 @@ int main(int argc, char *argv[])
 
 			pre_x = motion->event_x;
 			pre_y = motion->event_y;
-
-            get_center(connection, window, &cenx, &ceny);
-            xcb_warp_pointer(connection, screen->root, window, 0,0,0,0, cenx, ceny);
 			
-            if (((deltax!=0)&&(deltay != 0))&&(flag == 0)){     
+            if (((deltax!=0) && (deltay != 0))&&(flag == 0)){
+
+            flag = 1;
+
+
+            
+                
             printf("(%d : %d)\n", deltax, deltay);
 
             mouse_mov[0] = (char) 0;
-
-            
 
 
             int *ptr2 = (int *)(&mouse_mov[1]);
@@ -251,12 +251,12 @@ int main(int argc, char *argv[])
             *ptr3 = deltay; 
             func(sockfd,mouse_mov,9); 
             bzero(mouse_mov, 9);
-            flag = 1;
             }
-            else{
+            else if(flag == 1){
                 flag = 0;
             }
-            
+
+            xcb_warp_pointer(connection, screen->root, window, 0,0,0,0, cenx, ceny); 
 			break;
             	
 			}
