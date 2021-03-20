@@ -79,3 +79,34 @@ int createimage( Display * dsp, struct shmimage * image, int width, int height )
     XSync( dsp, false ) ;
     return true ;
 }
+
+void getrootwindow( Display * dsp, struct shmimage * image ,int screen_no,int screen_width)
+{
+    if (screen_no == 0){
+        XShmGetImage( dsp, XDefaultRootWindow( dsp ), image->ximage, 0, 0, AllPlanes ) ;
+    }
+    else{
+        XShmGetImage( dsp, XDefaultRootWindow( dsp ), image->ximage, screen_width * screen_no, 0, AllPlanes ) ;
+    }
+}
+
+int get_frame( struct shmimage * src, struct shmimage * dst )
+{
+    int sw = src->ximage->width ;
+    int sh = src->ximage->height ;
+    int dw = dst->ximage->width ;
+    int dh = dst->ximage->height ;
+
+    unsigned int * d = dst->data;
+    int j, i ;
+    for( j = 0 ; j < dh ; ++j )
+    {
+        for( i = 0 ; i < dw ; ++i )
+        {
+            int x = (float)(i * src->ximage->width) / (float)dw ;
+            int y = (float)(j * src->ximage->height) / (float)dh ;
+            *d++ =  src->data[ y * src->ximage->width + x ] ;
+        }
+    }
+    return true ;
+}
