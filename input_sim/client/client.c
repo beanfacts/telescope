@@ -1,16 +1,96 @@
-#include <X11/Xlib.h>
-#include <netdb.h> 
-#include <stdio.h> 
-#include <stdlib.h> 
+#include <stdlib.h>
+#include <stdio.h>
+#include <inttypes.h>
+#include <xcb/xproto.h>
+#include <xcb/xcb.h>
+#include <xcb/xfixes.h>
+#include <netinet/tcp.h>
 #include <string.h> 
-#include <sys/types.h>
+#include <netdb.h> 
 #include <sys/socket.h> 
+#include <sys/types.h>
 #include <unistd.h>
 #include <arpa/inet.h> 
-#include <netinet/tcp.h>
 #define MAX 80 
 #define PORT 8080 
 #define SA struct sockaddr 
+
+static void setCursor (xcb_connection_t*, xcb_screen_t*, xcb_window_t, int);
+static void testCookie(xcb_void_cookie_t, xcb_connection_t*, char *); 
+
+    static void
+    testCookie (xcb_void_cookie_t cookie,
+                xcb_connection_t *connection,
+                char *errMessage )
+    {   
+        xcb_generic_error_t *error = xcb_request_check (connection, cookie);
+        if (error) {
+            fprintf (stderr, "ERROR: %s : %"PRIu8"\n", errMessage , error->error_code);
+            xcb_disconnect (connection);
+            exit (-1);
+        }   
+    }   
+
+
+
+    static void
+    setCursor (xcb_connection_t *connection,
+                xcb_screen_t     *screen,
+                xcb_window_t      window,
+                int               cursorId )
+    {
+        xcb_font_t font = xcb_generate_id (connection);
+        xcb_void_cookie_t fontCookie = xcb_open_font_checked (connection,
+                                                              font,
+                                                              strlen ("cursor"),
+                                                              "cursor" );
+        testCookie (fontCookie, connection, "can't open font");
+
+        xcb_cursor_t cursor = xcb_generate_id (connection);
+        xcb_create_glyph_cursor (connection,
+                                 cursor,
+                                 font,
+                                 font,
+                                 cursorId,
+                                 cursorId + 1,
+                                 0, 0, 0, 0, 0, 0 );
+
+        xcb_gcontext_t gc = xcb_generate_id (connection);
+
+        uint32_t mask = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_FONT;
+        uint32_t values_list[3];
+        values_list[0] = screen->black_pixel;
+        values_list[1] = screen->white_pixel;
+        values_list[2] = font;
+
+        xcb_void_cookie_t gcCookie = xcb_create_gc_checked (connection, gc, window, mask, values_list);
+        testCookie (gcCookie, connection, "can't create gc");
+
+        mask = XCB_CW_CURSOR;
+        uint32_t value_list = cursor;
+        xcb_change_window_attributes (connection, window, mask, &value_list);
+
+        xcb_free_cursor (connection, cursor);
+
+        fontCookie = xcb_close_font_checked (connection, font);
+        testCookie (fontCookie, connection, "can't close font");
+    }
+
+    void get_center(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *ret_ceny) {
+    xcb_get_geometry_cookie_t cookie;
+    xcb_get_geometry_reply_t *reply;
+
+    cookie = xcb_get_geometry(c, window);
+    
+    if ((reply = xcb_get_geometry_reply(c, cookie, NULL))) {
+		*ret_cenx = (reply->width)/2;
+		*ret_ceny = (reply->height)/2;
+        
+    }
+    free(reply);
+}
+
+
 
 void func(int sockfd, char *buff, int size) 
 { 
@@ -75,394 +155,197 @@ int main(int argc, char *argv[])
 
 
 
-    Display *display;
-    Window window;
-    XEvent event;
-    int s;
+        xcb_connection_t *connection = xcb_connect (NULL, NULL);
 
-    char *mouse_mov = calloc(9,sizeof(char));
-    char *mouse_but = calloc(6,sizeof(char));
-    char *keyboard = calloc(6, sizeof(char));
-    XWindowAttributes win_attri;
+     
+        xcb_screen_t *screen = xcb_setup_roots_iterator (xcb_get_setup (connection)).data;
 
- 
-      int fd;
-	Display *dpy;
-	Window root, child;
-	int rootX, rootY, winX, winY;
-	unsigned int mask;
-int flag = 0;
-    display = XOpenDisplay(NULL);
-    if (display == NULL)
-    {
-        fprintf(stderr, "Cannot open display\n");
-        exit(1);
-    }
- 
-    s = DefaultScreen(display);
- 
 
-    window = XCreateSimpleWindow(display, RootWindow(display, s), 10, 10, 1280, 720, 1,
-                           BlackPixel(display, s), WhitePixel(display, s));
- 
-
-    XSelectInput(display, window, KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask);
-
-    XMapWindow(display, window);
-    
-    int pre_xposi = 0;
-    int pre_yposi = 0;
-    int new_xposi = 0;
-    int new_yposi = 0;
-
-  
-    
-    while (1)
-    {
         
-        XNextEvent(display, &event);
-        
-        if (event.type == KeyPress)
-        {
+        xcb_window_t window    = xcb_generate_id (connection);
 
-            keyboard[0] = (char) 2;
+        uint32_t     mask      = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+        uint32_t     values[2] = {screen->white_pixel,
+                                     XCB_EVENT_MASK_POINTER_MOTION
+									 | XCB_EVENT_MASK_BUTTON_PRESS 
+									 | XCB_EVENT_MASK_BUTTON_RELEASE
+									 | XCB_EVENT_MASK_KEY_PRESS
+									 | XCB_EVENT_MASK_KEY_RELEASE
+                                     | XCB_EVENT_MASK_ENTER_WINDOW
+                                     | XCB_EVENT_MASK_LEAVE_WINDOW
+                                     };
 
-            int *ptr = (int *)(&keyboard[1]);
-            *ptr =  event.xkey.keycode;
+        xcb_create_window (connection,    
+                           0,                            
+                           window,                        
+                           screen->root,                  
+                           0, 0,                          
+                           300, 300,                      
+                           10,                            
+                           XCB_WINDOW_CLASS_INPUT_OUTPUT, 
+                           screen->root_visual,           
+                           mask, values );               
 
-            keyboard[5] = (char) 1;
+        xcb_map_window (connection, window);
+
+        xcb_flush (connection);
+		int cenx;
+		int ceny;
+		
+
+        xcb_generic_event_t *event;
+
+		
 
 
-            //printf("sending code = %d\n", keyboard[0]);
-            //printf("keycode = %d\n", *ptr);
-            //printf("press or not? %d\n", keyboard[5]);
+		int pre_x = 0;
+		int pre_y = 0;
+		int new_x = 0;
+		int new_y = 0;
+		int deltax = 0;
+		int deltay = 0;
 
 
-            //code for sending keyboard array is here
-            func(sockfd, keyboard,6); 
+
+        char *mouse_mov = malloc(9);
+        char *mouse_but = malloc(6);
+        char *keyboard = malloc(6);
+        xcb_xfixes_query_version(connection,4,0);
+        xcb_xfixes_show_cursor(connection, screen->root);
 
 
+        while ( (event = xcb_wait_for_event (connection)) ) {
             
-        }
-        else if (event.type == KeyRelease)
-        {
-            
-            
-            keyboard[0] = (char) 2;
+          
+			switch (event->response_type & ~0x80)
+			{
+			case XCB_MOTION_NOTIFY:{
+			xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)event;
+			
 
-            int *ptr1 = (int *)(&keyboard[1]);
-            *ptr1 =  event.xkey.keycode;
+			new_x = motion->event_x;	
+			new_y = motion->event_y;
 
-            keyboard[5] = (char) 0;
-        
-/*
-            printf("sending code = %d\n", keyboard[0]);
-            printf("keycode = %d\n", *ptr1);
-            printf("press or not? %d\n", keyboard[5]);
-*/
+			deltax = new_x - pre_x;
+			deltay = pre_y - new_y;
 
-            //code for sending keyboard array is here
-            func(sockfd,keyboard, 6);
+			pre_x = motion->event_x;
+			pre_y = motion->event_y;
 
-
-            
-        }
-        else if (XQueryPointer(display,window,&root,&child,
-              &rootX,&rootY,&winX,&winY,&mask) && event.type != ButtonPress && event.type != ButtonRelease)
-        {
-
-            /*
-            if (flag) {
-                printf("flag ignore --------- \n");
-                flag = 0;
-                continue;
-            }
-            */
-            
-            XQueryPointer(display,window,&root,&child,
-              &rootX,&rootY,&winX,&winY,&mask);
-            
-	        XGetWindowAttributes(display, window, &win_attri);
-                
-            int width = win_attri.width;
-            int height = win_attri.height;
-
-            int cen_x = width/2;
-            int cen_y = height/2;
-
-            
-            new_xposi = winX;
-            new_yposi = winY;
-
-            int deltax = new_xposi-pre_xposi;
-            int deltay = new_yposi - pre_yposi;
-
-            pre_xposi = winX;
-            pre_yposi = winY;
-            
-
-           //int deltax = winX - 100;
-           //int deltay = winY - 100;
+            get_center(connection, window, &cenx, &ceny);
+            xcb_warp_pointer(connection, screen->root, window, 0,0,0,0, cenx, ceny);
+			
+            if ((deltax!=0)&&(deltay != 0)){     
+            printf("(%d : %d)\n", deltax, deltay);
 
             mouse_mov[0] = (char) 0;
 
-            if ((deltax != 0 || deltay != 0)&&(flag == 0)) {
 
-                
-            flag = 1;
-            printf("delta x: %d, delta y: %d\n", deltax, deltay);
             int *ptr2 = (int *)(&mouse_mov[1]);
             *ptr2 = deltax;
 
             int *ptr3 = (int *)(&mouse_mov[5]);
             *ptr3 = deltay; 
-            func(sockfd,mouse_mov, 16); 
-
+            func(sockfd,mouse_mov,9); 
+            bzero(mouse_mov, 9);
             }
-            else if (flag == 1){
-                flag = 0;
-            }
-            XWarpPointer(display, 0, window, 0, 0, 0, 0, cen_x, cen_y);
-            //flag = 1;
-
             
-            //XWarpPointer(display, window, window, NULL, NULL, NULL, NULL, cen_x, cen_y);
-
-            //count ++;
-            //XWarpPointer(display, None, DefaultRootWindow(display), 0, 0, 0, 0, cen_x, cen_y);
-                                        //printf("moved to center\n");
-                    
-            
-            
-    /*
-            printf("sending type is %d \n", mouse_mov[0]);
-            printf("\tdx = %d\n", *ptr2);
-            printf("\tdy = %d\n", *ptr3);
-    */
-            //code for sending mouse movement
-                        
-        
-
-/*
-	        XGetWindowAttributes(display, window, &win_attri);
+			break;
+            	
+			}
+			case XCB_BUTTON_PRESS: {
+				xcb_button_press_event_t *bp = (xcb_button_press_event_t *)event;
                 
-            int width = win_attri.width;
-            int height = win_attri.height;
+                    printf ("Button %d pressed\n", bp->detail );
 
-            int cen_x = width/2;
-            int cen_y = height/2;
-
-            //printf("%d\n",XWarpPointer(display, window, window, 0, 0, cen_x-300, height, cen_x, cen_y));
-
-
-            XWarpPointer(display, window, window, 0, 0, cen_x-300, height, cen_x, cen_y);
-            XWarpPointer(display, window, window, 0, 0, width, cen_y-150, cen_x, cen_y);
-            XWarpPointer(display, window, window, 0, cen_y+150, width, height, cen_x, cen_y);
-            XWarpPointer(display, window, window, cen_x+300, 0, width, height, cen_x, cen_y);
-
-
-            if((winX == cen_x-300)||(winX == cen_x+300)||(winY == cen_y - 150)||(winY == cen_y + 150)){
-
-                pre_yposi = cen_y;
-                pre_xposi = cen_x;
-                new_xposi = cen_x;
-                new_yposi = cen_y;
-                flag = 1;
-                //new_yposi = cen_y;
-                //new_xposi = cen_x;
-                printf("moved to center\n");
-            
-                
-            }
-            else{
-                flag = 0;
-                new_xposi = winX;
-                new_yposi = winY;
-
-                int deltax = new_xposi-pre_xposi;
-                int deltay = pre_yposi-new_yposi;
-
-
-                pre_xposi = winX;
-                pre_yposi = winY;
-
-                
-                mouse_mov[0] = (char) 0;
-
-                printf("win x: %d, win y: %d\n", deltax, deltay);
-                //XWarpPointer(display, window, window, NULL, NULL, NULL, NULL, cen_x, cen_y);
-
-                
-                //XWarpPointer(display, None, DefaultRootWindow(display), 0, 0, 0, 0, cen_x, cen_y);
-                                            //printf("moved to center\n");
-                        
-
-                int *ptr2 = (int *)(&mouse_mov[1]);
-                *ptr2 = deltax;
-
-                int *ptr3 = (int *)(&mouse_mov[5]);
-                *ptr3 = deltay; 
-                
-                printf("sending type is %d \n", mouse_mov[0]);
-                printf("\tdx = %d\n", *ptr2);
-                printf("\tdy = %d\n", *ptr3);
-                //code for sending mouse movement
-
-                
-                func(sockfd,mouse_mov,9); 
-                
-            };
-*/
-         
-
-            
-        }
-
-        else if (event.type == ButtonPress){
-            if (event.xbutton.button == 1){
-                printf("left button clicked\n");
-
-                mouse_but[0] = (char) 1;
-
-                int *ptr4 = (int *)(&mouse_but[1]);
-                *ptr4 = event.xbutton.button;
-
-                mouse_but[5] = (char) 1;
-
-/*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr4);
-                printf("press or not %d\n", mouse_but[5]);
-*/
-
-            // code for sending array of mouse button is here 
-            func(sockfd,mouse_but, 6); 
-
-
-
-            }
-            else if (event.xbutton.button == 2){
-                //printf("scroll button clicked\n");
                 mouse_but[0] = (char) 1;
 
                 int *ptr5 = (int *)(&mouse_but[1]);
-                *ptr5 = event.xbutton.button;
+                *ptr5 = bp->detail;
 
                 mouse_but[5] = (char) 1;
+                func(sockfd, mouse_but, 6); 
+                bzero(mouse_but, 6);
+                
+			}
 
-                /*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr5);
-                printf("press or not %d\n", mouse_but[5]);
-*/
+			case XCB_BUTTON_RELEASE: {
+                xcb_button_release_event_t *br = (xcb_button_release_event_t *)event;
+                
 
-            // code for sending array of mouse button is here 
-            func(sockfd, mouse_but, 6); 
-            }
-            else if (event.xbutton.button == 3){
-                //printf("right button clicked\n");
+                printf ("Button %"PRIu8" released\n", br->detail);
+
                 mouse_but[0] = (char) 1;
 
                 int *ptr6 = (int *)(&mouse_but[1]);
-                *ptr6 = event.xbutton.button;
+                *ptr6 = br->detail;
 
-                mouse_but[5] = (char) 1;
+                mouse_but[5] = (char) 0;
+                func(sockfd, mouse_but, 6); 
+                bzero(mouse_but, 6);
 
-                /*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr6);
-                printf("press or not %d\n", mouse_but[5]);
-*/
-
-            // code for sending array of mouse button is here 
-            func(sockfd, mouse_but, 6); 
+                break;
             }
-            else if (event.xbutton.button == 4){
-                //printf("scroll up\n");
-                mouse_but[0] = (char) 1;
 
-                int *ptr7 = (int *)(&mouse_but[1]);
-                *ptr7 = event.xbutton.button;
+			case XCB_KEY_PRESS: {
+                xcb_key_press_event_t *kp = (xcb_key_press_event_t *)event;
+                
+                printf ("Key pressed in window %d\n", kp->detail);
 
-                mouse_but[5] = (char) 1;
+                keyboard[0] = (char) 2;
 
-                /*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr7);
-                printf("press or not %d\n", mouse_but[5]);
-*/
+                int *ptr = (int *)(&keyboard[1]);
+                *ptr =  kp->detail;
 
-            // code for sending array of mouse button is here 
-            func(sockfd,mouse_but, 6); 
+                keyboard[5] = (char) 1;
+
+                func(sockfd,keyboard, 6);
+                bzero(keyboard, 6);
+
+                break;
             }
-            else if (event.xbutton.button == 5){
-                //printf("scroll down\n");
-                mouse_but[0] = (char) 1;
 
-                int *ptr8 = (int *)(&mouse_but[1]);
-                *ptr8 = event.xbutton.button;
+			case XCB_KEY_RELEASE: {
+                xcb_key_release_event_t *kr = (xcb_key_release_event_t *)event;
+                
 
-                mouse_but[5] = (char) 1;
-                /*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr8);
-                printf("press or not %d\n", mouse_but[5]);
-*/
+                printf ("Key released in window %d\n", kr->detail);
 
-            // code for sending array of mouse button is here 
-            func(sockfd, mouse_but, 6); 
+                keyboard[0] = (char) 2;
+
+                int *ptr = (int *)(&keyboard[1]);
+                *ptr =  kr->detail;
+
+                keyboard[5] = (char) 0;
+
+                func(sockfd,keyboard, 6);
+                bzero(keyboard, 6);
+
+
+                break;
             }
+
+            case XCB_ENTER_NOTIFY:{
+                xcb_xfixes_hide_cursor(connection, screen->root);
+                printf("enter\n");
+                break;
+            }
+
+            case XCB_LEAVE_NOTIFY:{
+                xcb_xfixes_show_cursor(connection, screen->root);
+                setCursor (connection, screen, window, 58);
+                
+                printf("leave\n");
+                break;
+            }
+			
+			default:
+				printf ("Unknown event: %"PRIu8"\n",
+                        event->response_type);
+                break;
+			}
             
-            else{
-                //printf("some button on mouse pressed");
-                mouse_but[0] = (char) 1;
-
-                int *ptr9 = (int *)(&mouse_but[1]);
-                *ptr9 = event.xbutton.button;
-
-                mouse_but[5] = (char) 1;
-                /*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr9);
-                printf("press or not %d\n", mouse_but[5]);
-*/
-
-            // code for sending array of mouse button is here 
-            func(sockfd, mouse_but, 6); 
-            }
-
-
         }
 
-        else if (event.type == ButtonRelease){
-            //printf("button released\n");
-            mouse_but[0] = (char) 1;
-
-            int *ptr10 = (int *)(&mouse_but[1]);
-            *ptr10 = event.xbutton.button;
-
-            mouse_but[5] = (char) 0;
-            /*
-                printf("sending type is %d \n", mouse_but[0]);
-                printf("button code = %d\n",*ptr10);
-                printf("press or not %d\n", mouse_but[5]);
-*/
-
-            // code for sending array of mouse button is here 
-            func(sockfd, mouse_but, 6); 
-
-        }
-        
-        memset(mouse_mov, 0,9);
-        memset(mouse_but,0 ,6);
-        memset(keyboard, 0,6);
-        
-        
-    }
-
-    XCloseDisplay(display);
-    
-  
-    // close the socket 
-    close(sockfd); 
+        return 0;
 } 
