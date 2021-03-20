@@ -9,8 +9,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#include <X11/Xlib.h>
-#include <X11/extensions/XTest.h>
+#include <xcb/xproto.h>
+#include <xcb/xcb.h>
+#include <xcb/xfixes.h>
 
 #define MAX 90
 #define SA struct sockaddr
@@ -63,13 +64,13 @@ ControlPacket decode_packet(char *stream, int size) {
     return pkt;
 }
 
-bool process_input(ControlPacket pkt, Display *disp, Window xwin) {
+bool process_input(ControlPacket pkt, xcb_connection_t *disp, xcb_screen_t *screen, xcb_window_t *xwin) {
     
     bool r = false;
-
+    
     switch (pkt.controlPktType) {
         case 0:
-            XWarpPointer(disp, xwin, 0, 0, 0, 0, 0, pkt.mmove_dx, pkt.mmove_dy);
+            xcb_warp_pointer(disp, screen->root, xwin, 0, 0, 0, 0, pkt.mmove_dx, pkt.mmove_dy);
             printf("move mouse: %d, %d\n", pkt.mmove_dx, pkt.mmove_dy);
             r = true;
             break;
@@ -97,11 +98,45 @@ void func(int sockfd)
 { 
     
     /* Open X11 display */
-    Display *Xdisp;
-    Window Xrwin;
 
-    Xdisp = XOpenDisplay(0);
-    Xrwin = XRootWindow(Xdisp, 0);
+    xcb_connection_t *connection = xcb_connect (NULL, NULL);
+
+     
+    xcb_screen_t *screen = xcb_setup_roots_iterator (xcb_get_setup (connection)).data;
+
+    uint32_t     mask      = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+    uint32_t     values[2] = {screen->white_pixel,
+                                     XCB_EVENT_MASK_POINTER_MOTION
+									 | XCB_EVENT_MASK_BUTTON_PRESS 
+									 | XCB_EVENT_MASK_BUTTON_RELEASE
+									 | XCB_EVENT_MASK_KEY_PRESS
+									 | XCB_EVENT_MASK_KEY_RELEASE
+                                     | XCB_EVENT_MASK_ENTER_WINDOW
+                                     | XCB_EVENT_MASK_LEAVE_WINDOW
+                                     };
+
+        
+    xcb_window_t window    = xcb_generate_id (connection);
+
+            xcb_create_window (connection,    
+                           0,                            
+                           window,                        
+                           screen->root,                  
+                           0, 0,                          
+                           300, 300,                      
+                           10,                            
+                           XCB_WINDOW_CLASS_INPUT_OUTPUT, 
+                           screen->root_visual,           
+                           mask, values );               
+
+        xcb_map_window (connection, window);
+
+        xcb_flush (connection);
+
+
+
+
+
     
     //char buff[MAX]; 
 	char *buff = calloc(MAX, sizeof(char));
@@ -124,7 +159,7 @@ void func(int sockfd)
         }
 
         ControlPacket pkt = decode_packet(buff, size_b);
-        process_input(pkt, Xdisp, Xrwin);
+        process_input(pkt, connection, screen, window);
         
         // print buffer which contains the client contents 
         //for(int i =0; i < size, ) 
