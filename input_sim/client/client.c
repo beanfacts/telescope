@@ -212,6 +212,7 @@ int main(int argc, char *argv[])
         char *keyboard = malloc(6);
         xcb_xfixes_query_version(connection,4,0);
         xcb_xfixes_show_cursor(connection, screen->root);
+        int flag = 0;
 
 
         while ( (event = xcb_wait_for_event (connection)) ) {
@@ -235,10 +236,12 @@ int main(int argc, char *argv[])
             get_center(connection, window, &cenx, &ceny);
             xcb_warp_pointer(connection, screen->root, window, 0,0,0,0, cenx, ceny);
 			
-            if ((deltax!=0)&&(deltay != 0)){     
+            if (((deltax!=0)&&(deltay != 0))&&(flag == 0)){     
             printf("(%d : %d)\n", deltax, deltay);
 
             mouse_mov[0] = (char) 0;
+
+            
 
 
             int *ptr2 = (int *)(&mouse_mov[1]);
@@ -248,6 +251,10 @@ int main(int argc, char *argv[])
             *ptr3 = deltay; 
             func(sockfd,mouse_mov,9); 
             bzero(mouse_mov, 9);
+            flag = 1;
+            }
+            else{
+                flag = 0;
             }
             
 			break;
