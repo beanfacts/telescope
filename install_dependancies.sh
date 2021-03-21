@@ -1,4 +1,17 @@
 #!/bin/sh
+echo Update
+sudo apt update
+sudo apt -y full-upgrade
+
+echo Installing RDMA stuff
+
+sudo apt install -y rdma-core
+sudo apt install -y rdmacm-utils
+
+echo Installing perftest
+
+sudo apt install -y perftest
+
 echo Installing xlib
 
 sudo apt install -y libx11-dev
