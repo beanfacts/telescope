@@ -18,14 +18,14 @@ throughput and performance because it frees up resources.
 1. Higher Datarates
 2. No Compression
 3. Your Main PC can be far away from you
-4. Full 32-bit color
+4. Full 24-bit color
 ### Disadvantages:
 1. Higher cost than using compressed alternatives such as parsec
 
 ## Hardware Requirements
 
 ### Bandwidth
-Telescope streams uncompressed 32-bit 1080p video stream by default.
+Telescope streams uncompressed 24-bit-per-pixel 1080p video stream by default.
 The data rates of this averages around 3 Gbps therefore you 
 will need a 10 Gbps NIC. The stream can be pushed to higher 
 resolutions with better networking
