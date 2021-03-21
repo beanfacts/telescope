@@ -42,7 +42,7 @@ int getframe(struct shmimage* src, struct shmimage* dst)
     int j, i;
     for(j = 0; j < dh; ++j)
     {
-        for(i = 0; i < dw; ++i)
+        for(i = 0; i < dw; ++i){
             int x =(i* src->ximage->width) / dw;
             int y =(j* src->ximage->height) / dh;
             *d++ = src->data[ y* src->ximage->width + x ];
