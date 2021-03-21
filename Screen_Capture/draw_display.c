@@ -18,12 +18,6 @@ void getrootwindow(Display* dsp, struct shmimage* image)
     XShmGetImage(dsp, XDefaultRootWindow(dsp), image->ximage, 0, 0, AllPlanes);
 }
 
-long timestamp()
-{
-   struct timeval tv;
-   gettimeofday(&tv, NULL);
-   return tv.tv_sec*1000000L + tv.tv_usec;
-}
 
 Window createwindow(Display* dsp, int width, int height)
 {
@@ -49,7 +43,6 @@ int getframe(struct shmimage* src, struct shmimage* dst)
     for(j = 0; j < dh; ++j)
     {
         for(i = 0; i < dw; ++i)
-        {
             int x =(i* src->ximage->width) / dw;
             int y =(j* src->ximage->height) / dh;
             *d++ = src->data[ y* src->ximage->width + x ];
@@ -71,7 +64,6 @@ int run(Display* dsp, Window window, struct shmimage* src, struct shmimage* dst)
     int initialized = false;
     int dstwidth = dst->ximage->width;
     int dstheight = dst->ximage->height;
-    long periodts = timestamp();
     long frames = 0;
     int fd = ConnectionNumber(dsp);
     while(running)
@@ -99,15 +91,6 @@ int run(Display* dsp, Window window, struct shmimage* src, struct shmimage* dst)
             getrootwindow(dsp, src);
             getframe(src, dst);
             XShmPutImage(dsp, window, gc, dst->ximage, 0, 0, 0, 0, dstwidth, dstheight, False);
-            usleep(1000000/50);
-            ++frames;
-            int periodus = timestamp() - periodts;
-            if(periodus >= 1000000)
-            {
-                printf("fps: %d\n", (int)round(1000000.0L* frames / periodus));
-                frames = 0;
-                periodts = timestamp();
-            }
         }
     }
     return true;
