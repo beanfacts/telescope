@@ -23,3 +23,6 @@ sudo apt-get install -y libxcb-xfixes0-dev
 
 echo Installing Xtest
 sudo apt install -y libxtst-dev
+
+echo Installing X11 library
+sudo apt install -y libx11-dev
