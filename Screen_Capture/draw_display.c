@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdlib.h>  // for strtol
 #include <sys/shm.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -10,121 +11,214 @@
 #include "screencap.h"
 #include "screencap.c"
 #include "screen_struc.h"
-#include <sys/time.h>
-#include <unistd.h>
+#ifdef __linux__
+    #include <sys/time.h>
+#endif
 
-void getrootwindow(Display* dsp, struct shmimage* image)
+#include <sys/socket.h> 
+#include <sys/types.h> 
+#include <arpa/inet.h>
+
+#define NAME   "Screen Capture"
+#define FRAME  16667
+#define PERIOD 1000000
+#define NAME   "Screen Capture"
+#define SA struct sockaddr
+#define PORT 6969
+
+long timestamp( )
 {
-    XShmGetImage(dsp, XDefaultRootWindow(dsp), image->ximage, 0, 0, AllPlanes);
+   struct timeval tv ;
+
+   gettimeofday( &tv, NULL ) ;
+   return tv.tv_sec*1000000L + tv.tv_usec ;
+}
+int sock_create(int arr[]) 
+{ 
+    int sockfd, connfd, len; 
+    struct sockaddr_in servaddr, cli;
+    sockfd = socket(AF_INET, SOCK_STREAM, 0); 
+    if (sockfd == -1) { 
+        printf("socket creation failed...\n"); 
+        exit(0); 
+    } 
+    else
+        printf("Socket successfully created..\n"); 
+    bzero(&servaddr, sizeof(servaddr)); 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
+    servaddr.sin_port = htons(PORT);
+    if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
+        printf("socket bind failed...\n"); 
+        exit(0); 
+    } 
+    else
+        printf("Socket successfully binded..\n"); 
+    if ((listen(sockfd, 5)) != 0) { 
+        printf("Listen failed...\n"); 
+        exit(0); 
+    } 
+    else
+        printf("Server listening..\n"); 
+    len = sizeof(cli);
+    connfd = accept(sockfd, (SA*)&cli, &len); 
+    if (connfd < 0) { 
+        printf("server acccept failed...\n"); 
+        exit(0); 
+    } 
+    else
+        printf("server acccept the client...\n"); 
+    arr[0] = connfd;
+    arr[1] = sockfd;
+    // func(connfd); 
+    return arr;
+} 
+
+Window createwindow( Display * dsp, int width, int height )
+{
+    unsigned long mask = CWBackingStore ;
+    XSetWindowAttributes attributes ;
+    attributes.backing_store = NotUseful ;
+    mask |= CWBackingStore ;
+    Window window = XCreateWindow( dsp, DefaultRootWindow( dsp ),
+            0, 0, width, height, 0,
+            DefaultDepth( dsp, XDefaultScreen( dsp ) ),
+            InputOutput, CopyFromParent, mask, &attributes ) ;
+    XStoreName( dsp, window, NAME );
+    XSelectInput( dsp, window, StructureNotifyMask ) ;
+    XMapWindow( dsp, window );
+    return window ;
 }
 
-
-Window createwindow(Display* dsp, int width, int height)
+void destroywindow( Display * dsp, Window window )
 {
-    unsigned long mask = CWBackingStore;
-    XSetWindowAttributes atr;
-    Window window = XCreateWindow(dsp, DefaultRootWindow(dsp),0, 0, width, height, 0,DefaultDepth(dsp, XDefaultScreen(dsp)),InputOutput, CopyFromParent, mask, &atr);
-
-    XStoreName(dsp, window, "Screen Capture");
-    XSelectInput(dsp, window, StructureNotifyMask);
-    XMapWindow(dsp, window);
-    return window;
+    XDestroyWindow( dsp, window );
 }
-int getframe(struct shmimage* src, struct shmimage* dst)
-{   
 
-    int sw = src->ximage->width;
-    int sh = src->ximage->height;
-    int dw = dst->ximage->width;
-    int dh = dst->ximage->height;
+int run( Display * dsp, Window window, struct shmimage * src, struct shmimage * dst , int screen_no, int screen_width, int connfd)
+{
+    XGCValues xgcvalues ;
+    xgcvalues.graphics_exposures = False ;
+    GC gc = XCreateGC( dsp, window, GCGraphicsExposures, &xgcvalues ) ;
 
-    int* d = dst->data;
-    int j, i;
-    for(j = 0; j < dh; ++j)
+    Atom delete_atom = XInternAtom( dsp, "WM_DELETE_WINDOW", False ) ;
+    XSetWMProtocols( dsp, window, &delete_atom, True ) ;
+
+    XEvent xevent ;
+    int running = true ;
+    int initialized = false ;
+    int dstwidth = dst->ximage->width ;
+    int dstheight = dst->ximage->height ;
+    long framets = timestamp( ) ;
+    long periodts = timestamp( ) ;
+    long frames = 0 ;
+    int fd = ConnectionNumber( dsp ) ;
+    while( running )
     {
-        for(i = 0; i < dw; ++i)
-            int x =(i* src->ximage->width) / dw;
-            int y =(j* src->ximage->height) / dh;
-            *d++ = src->data[ y* src->ximage->width + x ];
-        }
-    }
-    return true;
-}
-
-int run(Display* dsp, Window window, struct shmimage* src, struct shmimage* dst)
-{
-    XGCValues xgcvalues;
-    GC gc = XCreateGC(dsp, window, GCGraphicsExposures, &xgcvalues);
-
-    Atom delete_atom = XInternAtom(dsp, "WM_DELETE_WINDOW", False);
-    XSetWMProtocols(dsp, window, &delete_atom, True);
-
-    XEvent xevent;
-    int running = true;
-    int initialized = false;
-    int dstwidth = dst->ximage->width;
-    int dstheight = dst->ximage->height;
-    long frames = 0;
-    int fd = ConnectionNumber(dsp);
-    while(running)
-    {
-        while(XPending(dsp))
+        while( XPending( dsp ) )
         {
-            XNextEvent(dsp, &xevent);
-            if((xevent.type == ClientMessage && xevent.xclient.data.l[0] == delete_atom)
-                || xevent.type == DestroyNotify)
+            XNextEvent( dsp, &xevent ) ;
+            if( ( xevent.type == ClientMessage && xevent.xclient.data.l[0] == delete_atom )
+                || xevent.type == DestroyNotify )
             {
-                running = false;
-                break;
+                running = false ;
+                break ;
             }
-            else if(xevent.type == ConfigureNotify)
+            else if( xevent.type == ConfigureNotify )
             {
-                if(xevent.xconfigure.width == dstwidth
-                    && xevent.xconfigure.height == dstheight)
+                if( xevent.xconfigure.width == dstwidth
+                    && xevent.xconfigure.height == dstheight )
                 {
-                    initialized = true;
+                    initialized = true ;
                 }
             }
         }
-        if(initialized)
+        if( initialized )
         {
-            getrootwindow(dsp, src);
-            getframe(src, dst);
-            XShmPutImage(dsp, window, gc, dst->ximage, 0, 0, 0, 0, dstwidth, dstheight, False);
+            getrootwindow( dsp, src ,screen_no, screen_width) ;
+            if( !get_frame( src, dst ) )
+            {
+                return false ;
+            }
+            XShmPutImage( dsp, window, gc, dst->ximage, 0, 0, 0, 0, dstwidth, dstheight, False ) ;
+            int size = (dst->ximage->height)*(dst->ximage->width)*((dst->ximage->bits_per_pixel)/8);
+            write(connfd,dst->ximage->data,size);
+            XSync( dsp, False ) ;
+
+        
         }
     }
-    return true;
+    return true ;
 }
 
-int main(int argc, char* argv[])
+int main( int argc, char * argv[] )
 {
-    Display* dsp = XOpenDisplay(NULL);//create connection to the X server
-    int screen = XDefaultScreen(dsp);
-    if(!dsp)
+    Display * dsp = XOpenDisplay(NULL) ;//create connection to the X server
+    int screen = XDefaultScreen( dsp ) ;
+    if( !dsp )
     {
-        printf("Screen Capture" ": could not open a connection to the X server\n");
-        return 1;
+        printf( NAME ": could not open a connection to the X server\n" ) ;
+        return 1 ;
     }
 
-    (!XShmQueryExtension(dsp));// check the avalibility of the SHM
-
-    struct shmimage src, dst;
-    initimage(&src);
-    int width = XDisplayWidth(dsp, screen);
-    int height = XDisplayHeight(dsp, screen);
-    
-    initimage(&dst);
+    if( !XShmQueryExtension( dsp ) )// check the avalibility of the SHM
+    {
+        XCloseDisplay( dsp ) ;
+        printf( NAME ": the X server does not support the XSHM extension\n" ) ;
+        return 1 ;
+    }
+    struct shmimage src, dst ;
+    initimage( &src ) ;
+    int width, height, screen_no;
+    if (argc == 1){
+        // if argc is 1 means we have no other modifications and we are running with 1 display
+        width = XDisplayWidth( dsp, screen ) ;
+        height = XDisplayHeight( dsp, screen ) ;
+        screen_no = 0;
+    }
+    else if (argc == 4 ){
+        // if we have more than 1 argc means that we are runing something else
+        // usage example ./draw_display 1920 1080 0
+        // 1080p display 1st screen
+        // ultra-wide can use ./draw_display 3840 1080 0
+        width = atoi(argv[1]) ;
+        height = atoi(argv[2]);
+        screen_no = atoi(argv[3]);
+    }
+    int arr[2];
+    printf("Resolution: %d X %d \nScreen:%d \n",width,height,screen_no);
+    sock_create(arr);
+    if( !createimage( dsp, &src, width, height ) )
+    {
+        XCloseDisplay( dsp ) ;
+        return 1 ;
+    }
+    initimage( &dst ) ;
     int dstwidth = width / 2;
-    int dstheight = height / 2;
-    createimage(dsp, &src, width, height);
-    createimage(dsp, &dst, dstwidth, dstheight);
+    int dstheight = height / 2 ;
+    if( !createimage( dsp, &dst, dstwidth, dstheight ) )
+    {
+        destroyimage( dsp, &src ) ;
+        XCloseDisplay( dsp ) ;
+        return 1 ;
+    }
 
-    Window window = createwindow(dsp, dstwidth, dstheight);
-    run(dsp, window, &src, &dst);
-    XDestroyWindow(dsp, window); 
+    if( dst.ximage->bits_per_pixel != 32 )//monitor is 24 + 8 for rendering
+    {
+        destroyimage( dsp, &src ) ;
+        destroyimage( dsp, &dst ) ;
+        XCloseDisplay( dsp ) ;
+        printf( NAME   ": bits_per_pixel is not 32 bits\n" ) ;
+        return 1 ;
+    }
 
-    destroyimage(dsp, &src);
-    destroyimage(dsp, &dst);
-    XCloseDisplay(dsp);
-    return 0;
+    Window window = createwindow( dsp, dstwidth, dstheight ) ;
+    run( dsp, window, &src, &dst , screen_no, width, arr[0]) ;
+    destroywindow( dsp, window ) ;  
+
+    destroyimage( dsp, &src ) ;
+    destroyimage( dsp, &dst ) ;
+    close(arr[1]); 
+    XCloseDisplay( dsp ) ;
+    return 0 ;
 }
