@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
 			new_y = motion->event_y;
 
 			deltax = new_x - pre_x;
-			deltay = pre_y - new_y;
+			deltay = new_y - pre_y;
 
 			pre_x = motion->event_x;
 			pre_y = motion->event_y;
