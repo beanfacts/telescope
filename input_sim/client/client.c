@@ -260,21 +260,7 @@ int main(int argc, char *argv[])
 			break;
             	
 			}
-			case XCB_BUTTON_PRESS: {
-				xcb_button_press_event_t *bp = (xcb_button_press_event_t *)event;
-                
-                    printf ("Button %d pressed\n", bp->detail );
 
-                mouse_but[0] = (char) 1;
-
-                int *ptr5 = (int *)(&mouse_but[1]);
-                *ptr5 = bp->detail;
-
-                mouse_but[5] = (char) 1;
-                func(sockfd, mouse_but, 6); 
-                bzero(mouse_but, 6);
-                
-			}
 
 			case XCB_BUTTON_RELEASE: {
                 xcb_button_release_event_t *br = (xcb_button_release_event_t *)event;
@@ -345,7 +331,21 @@ int main(int argc, char *argv[])
                 printf("leave\n");
                 break;
             }
-			
+			case XCB_BUTTON_PRESS: {
+				xcb_button_press_event_t *bp = (xcb_button_press_event_t *)event;
+                
+                    printf ("Button %d pressed\n", bp->detail );
+
+                mouse_but[0] = (char) 1;
+
+                int *ptr5 = (int *)(&mouse_but[1]);
+                *ptr5 = bp->detail;
+
+                mouse_but[5] = (char) 1;
+                func(sockfd, mouse_but, 6); 
+                bzero(mouse_but, 6);
+                
+			}			
 			default:
 				printf ("Unknown event: %"PRIu8"\n",
                         event->response_type);
