@@ -1,51 +1,52 @@
-# telescope
+<h1 align='center'>Telescope</h1>
 
-## What is telescope?
-Telescope is a RDMA based Desktop streaming application
+## What is it?
+Telescope is a high-performance remote desktop streaming solution that uses RDMA-capable hardware for low latency and CPU usage at full quality.  
+It supports RDMA capable Ethernet (RoCE) or InfiniBand (RDMAoIB) networking hardware, as well as software RDMA.
 
-## What is RDMA?
-RDMA stands for Remote Direct Memory Access. Using RDMA allows a 
-remote client to **directly** write to the memory of the host system  
-Remote Direct Memory Access (RDMA) allows
-computers in a network to exchange data in main memory without
-involving the processor, cache or operating system of either computer.
-## Why RDMA?
-Like locally based Direct Memory Access (DMA), RDMA improves 
-throughput and performance because it frees up resources.
+## A brief introduction to RDMA
+Remote Direct Memory Access is a technology that allows machines to directly read 
+and write memory regions of their peers. This allows for a CPU and kernel bypass, allowing
+for zero-copy, zero CPU usage memory copies, allowing large amounts of data to be moved with little
+transmission overhead.
 
-## Telescope vs Other Solutions
-### Advantages:
-1. Higher Datarates
-2. No Compression
-3. Your Main PC can be far away from you
-4. Full 24-bit color
-### Disadvantages:
-1. Higher cost than using compressed alternatives such as parsec
+## Why Telescope?
+Telescope's main advantages are
+- High data rates with low CPU usage
+- Fully uncompressed streaming with no blocking artifacts
+- Place your host computer anywhere in your local network to manage its heat output
+- Full 24-bit colour for professional-grade work
+
+If you are looking for a solution to stream your remote desktop session over the Internet, this repository does not aim to solve that issue.
+We recommend checking out [Parsec](https://parsec.app/) or [NoMachine](https://nomachine.com) if this is what you need.
 
 ## Hardware Requirements
 
 ### Bandwidth
-Telescope streams uncompressed 24-bit-per-pixel 1080p video stream by default.
-The data rates of this averages around 3 Gbps therefore you 
-will need a 10 Gbps NIC. The stream can be pushed to higher 
-resolutions with better networking
+Telescope stream resolution is determined by your monitor resolution and refresh rate of your X display.
+By default, it streams at 24bpp without any chroma subsampling - For a 1080p/60Hz video stream, you will require approximately 3.1 Gbps of available network throughput.  
+To calculate your bandwidth requirement, the formula is: `BW (Mbps) = <width> * <height> * <bit depth> * <framerate>`.
 
-### RDMA and RoCE
-Telescope relies on the RDMA protocol which can either be used over
-native infiniband or can be used with RoCE therefore the NIC used must
-also be able to support either of the protocols
+## Test environment
+- OS: Pop!\_OS 20.10
+- NIC: Mellanox ConnectX-3 10GbE NIC w/ RDMA
+- Required packages: rdma-core, libibverbs, rdmacm-utils, libx11-dev, libxtst-dev, libxcb1-dev
 
+## Installing Telescope
 
-## Development environment:
-### OS:
-PopOs 20.10
+1. Run the following commands to install all the dependencies for Telescope
+```bash
+sudo apt update
+sudo apt install git rdma-core libibverbs rdmacm-utils libx11-dev libxtst-dev libxcb1-dev -y
+```
 
-### NIC
-2 * [Mellenox Connect-X3](https://www.lazada.co.th/products/pulled-mellanox-connectx-3-cx341a-mcx341a-10gbe-pci-e-network-card-i1816010097-s5439296495.html?spm=a2o4m.searchlist.list.33.2dd271e4qex5fV&search=1)
+2. Wait for the project to be completed...
 
-### Interconnect
-Generic SFP+ cable
+## Copyright
+&copy; 2021 Telescope Project Developers  
+(Tim Dettmar, Vorachat Somsuay, Jirapong Pansak, Tairo Kageyama, Kittidech Ditsuwan)
+This repository is licensed under the GNU Affero General Public License, Version 3
+with the distribution terms specified in the license.
 
-### Server System:
-
-### Client System
+## License Notices
+RDMA baseline test code is based on the documentation and tutorials provided by Mellanox and Tarick Bedeir, licensed under the MIT license.
