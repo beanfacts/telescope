@@ -25,7 +25,8 @@ We recommend checking out [Parsec](https://parsec.app/) or [NoMachine](https://n
 ### Bandwidth
 Telescope stream resolution is determined by your monitor resolution and refresh rate of your X display.
 By default, it streams at 24bpp without any chroma subsampling - For a 1080p/60Hz video stream, you will require approximately 3.1 Gbps of available network throughput.  
-To calculate your bandwidth requirement, the formula is: `BW (Mbps) = <width> * <height> * <bit depth> * <framerate>`.
+To calculate your bandwidth requirement, the formula is:  
+`BW (Mbps) = <width> * <height> * <bit depth> * <framerate>`.
 
 ## Test environment
 - OS: Pop!\_OS 20.10
@@ -44,7 +45,7 @@ sudo apt install git rdma-core libibverbs rdmacm-utils libx11-dev libxtst-dev li
 
 ## Copyright
 &copy; 2021 Telescope Project Developers  
-(Tim Dettmar, Vorachat Somsuay, Jirapong Pansak, Tairo Kageyama, Kittidech Ditsuwan)
+(Tim Dettmar, Vorachat Somsuay, Jirapong Pansak, Tairo Kageyama, Kittidech Ditsuwan)  
 This repository is licensed under the GNU Affero General Public License, Version 3
 with the distribution terms specified in the license.
 
