@@ -1,4 +1,4 @@
-<h1 align='center'>Telescope</h1>
+<h1 align='center'>🔭Telescope🔭</h1>
 
 ## What is it?
 Telescope is a high-performance remote desktop streaming solution that uses RDMA-capable hardware for low latency and CPU usage at full quality.  
