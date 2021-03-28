@@ -1,16 +1,17 @@
+#include "screencap.h"
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
 #include <sys/shm.h>
+#include <X11/extensions/XShm.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <X11/extensions/XShm.h>
-#include "screencap.h"
 
-#define BPP    4
+#define BPP    4 // do not hardcode
 
+/* todo: fix! ugly function space!!!! */
 void initimage( struct shmimage * image )
 {
     image->ximage = NULL ;
@@ -80,6 +81,7 @@ int createimage( Display * dsp, struct shmimage * image, int width, int height )
     return true ;
 }
 
+/* todo: fix! we need to send 24bpp over the network - currently it sends BGRA we only need BGR. */
 void getrootwindow( Display * dsp, struct shmimage * image ,int screen_no,int screen_width)
 {
     if (screen_no == 0){
