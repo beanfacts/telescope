@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <arpa/inet.h>
 #include <X11/Xutil.h>
 #include <rdma/rsocket.h>
@@ -18,9 +19,9 @@
 /* todo: fix! errors should be printed to stderr, see draw_display for example */
 #define MAX 10000000 // should allocate just what is needed (frame size)
 #define SA struct sockaddr 
-#define WIDTH 960 // make dynamic
-#define HEIGHT 540 // make dynamic
-/* todo: fix! ugly function space!!!! */
+#define WIDTH 1920 // make dynamic
+#define HEIGHT 1080 // make dynamic
+
 
 #define RATE "Mbit/s"
 #define RATE_FRAC 131072
@@ -116,6 +117,9 @@ int main(int argc, char *argv[])
         win_w_color = BlackPixel(display, DefaultScreen(display));
         window = XCreateSimpleWindow(display,DefaultRootWindow(display),0, 0, WIDTH, HEIGHT, 0,win_b_color, win_w_color);
         visual = DefaultVisual(display, 0);
+        Atom window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+        long value = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+        XChangeProperty(display, window, window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &value, 1);
         XSelectInput(display, window, ExposureMask | KeyPressMask);
         XMapWindow(display, window);
         XFlush(display);
