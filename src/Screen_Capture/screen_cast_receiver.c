@@ -40,6 +40,13 @@ int putimage(char *image ,Display *display,Visual *visual,Window *window,GC gc)
         return 0;
 }
 
+double convert_timediff(struct timeval *t2, struct timeval *t1) {
+    double ct1, ct2;
+    ct1 = (double) t1->tv_sec + ((double) t1->tv_usec / (double) 1000000);
+    ct2 = (double) t2->tv_sec + ((double) t2->tv_usec / (double) 1000000);
+    return ct2 - ct1;
+}
+
 void func(int sockfd, Display* display, Visual* visual, Window* window, GC gc) 
 {
     char *buff = calloc(MAX,1); 
@@ -47,10 +54,11 @@ void func(int sockfd, Display* display, Visual* visual, Window* window, GC gc)
     ssize_t length, framebytes;
     int maxbytes = WIDTH*HEIGHT*4; // todo: make dynamic
     
-    clock_t t1, t2, t3 = 0;
+    //clock_t t1, t2, t3 = 0;
+    struct timeval t1, t2, t3;
     double fps, tdiff, data_rate, put_time = 0;
 
-    t1 = clock();
+    gettimeofday(&t1, NULL);
     
     while (1)
     {
@@ -60,25 +68,24 @@ void func(int sockfd, Display* display, Visual* visual, Window* window, GC gc)
         
         if (framebytes == maxbytes)
         {
-            t2 = clock();
+            gettimeofday(&t2, NULL);
             putimage(buff, display, visual, window, gc);
-            t3 = clock();
-
-            printf("%f", (double) t3 - t1);
+            gettimeofday(&t3, NULL);
 
             /* Seconds required to put the image on the screen */
-            put_time = (double) (t3 - t2) / (double) CLOCKS_PER_SEC;
+            //put_time = (double) (t3 - t2) / (double) CLOCKS_PER_SEC;
+            put_time = convert_timediff(&t3, &t2);
             /* Seconds required to receive and put the image on the screen */
-            tdiff = (double) (t3 - t1) / (double) CLOCKS_PER_SEC;
+            tdiff = convert_timediff(&t3, &t1);
             /* Effective data rate including draw time */
-            data_rate = ((double) framebytes / tdiff / RATE_FRAC);
+            data_rate = ((double) framebytes / tdiff / (double) RATE_FRAC);
             /* Effective framerate including receive time */
             fps = 1 / tdiff;
             /* Display statistics */
             printf("Time: %.4f, FPS: %.2f, Put FPS: %.2f, Rx: %.2f %s\n", tdiff, fps, 1/put_time, data_rate, RATE);
             
             /* Reset clock and buffer */
-            t1 = clock();
+            gettimeofday(&t1, NULL);
             framebytes = 0;
         }
         else if (framebytes > maxbytes)
