@@ -37,6 +37,19 @@ void destroyimage( Display * dsp, struct shmimage * image )
 
 int createimage( Display * dsp, struct shmimage * image, int width, int height )
 {
+    
+    /* Get the X11 display parameters to allocate the required amount of memory */
+    unsigned int disp_loc_x, disp_loc_y, disp_width, disp_height, disp_bpp, disp_border = 0;
+    XGetGeometry(dsp, XDefaultRootWindow(dsp), NULL, &disp_loc_x, &disp_loc_y,
+        &disp_width, &disp_height, &disp_border, &disp_bpp);
+
+    printf( "Display parameters:\n"
+            " X Position   : %u\n Y Position   : %u\n"
+            " Disp. Width  : %u\n Disp. Height : %u\n Disp. Depth  : %u\n"
+            " Disp. Border : %u\n",
+            disp_loc_x, disp_loc_y, disp_width, disp_height, disp_bpp, disp_border
+        );
+   
     // Create a shared memory area 
     image->shminfo.shmid = shmget( IPC_PRIVATE, width * height * BPP, IPC_CREAT | 0600 ) ;
     if( image->shminfo.shmid == -1 )

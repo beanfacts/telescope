@@ -14,6 +14,8 @@
 #include <X11/Xutil.h>
 #include <rdma/rsocket.h>
 #include <sys/time.h>
+#include <X11/extensions/Xfixes.h>
+#include <byteswap.h>
 
 /* todo: fix! dynamic width and height */
 /* todo: fix! errors should be printed to stderr, see draw_display for example */
@@ -21,24 +23,58 @@
 #define SA struct sockaddr 
 #define WIDTH 1920 // make dynamic
 #define HEIGHT 1080 // make dynamic
-
-
 #define RATE "Mbit/s"
 #define RATE_FRAC 131072
+
 
 XImage *create_ximage(Display *display, Visual *visual, int width, int height, char *image)
 {
     return XCreateImage(display, visual, 24,ZPixmap, 0, image, width, height, 32, 0);
 }
 
-int putimage(char *image ,Display *display,Visual *visual,Window *window,GC gc)
-{    XImage *ximage = create_ximage(display, visual, WIDTH, HEIGHT, image);
-        XEvent event;
-        bool exit = false;
-        int r;
-        /* todo: can you use xshm */
-        r = XPutImage(display, *window,gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT );
-        return 0;
+
+/*  Overlay the cursor on top of the screen. Currently requires both sources
+    to be 32bpp. Performs an alpha blend with the XImage capture as the
+    background and cursor as the foreground image. 
+    
+    Returns 0 if successful, 1 otherwise.
+*/
+int overlay_cursor(XImage* capture, XFixesCursorImage* cursor)
+{
+    //      capture->data;
+    //      cursor->pixels;
+    
+    /* Top left pixel for capture and cursor */
+    uint32_t* capture_top = (capture->data + (capture->width * cursor->y) + cursor->x); // BGRA
+    unsigned long* cursor_top = (cursor->pixels); // ARGB
+
+    unsigned long capture_pix;
+    unsigned long cursor_pix;
+
+    for (int i = 0; i < (cursor->width * cursor->height); i++)
+    {
+        /* Calculate foreground alpha value for blending *//*
+        alpha = *(char *) (cursor_top + i);
+        inv_alpha = 1 - alpha;
+        __bswap_64()
+        */
+
+        /* Just do a simple paste into the X image for now to test it works */
+        *(capture_top + ((i / 24) * capture->width) + (i % 24)) = __bswap_32(*(uint32_t *) (cursor_top + i));
+    }
+}
+
+
+int putimage(char *image, Display *display, Visual *visual, Window *window, GC gc)
+{
+    int r;
+    XImage *ximage = create_ximage(display, visual, WIDTH, HEIGHT, image);
+    XFixesCursorImage *cursor = XFixesGetCursorImage(display);
+    r = overlay_cursor(ximage, cursor);
+    XEvent event;
+    bool exit = false;
+    r = XPutImage(display, *window,gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT);
+    return 0;
 }
 
 double convert_timediff(struct timeval *t2, struct timeval *t1) {
@@ -104,7 +140,8 @@ int main(int argc, char *argv[])
         printf("Please specify the IP address and port");
         exit(1);
     }
-    else{
+    else
+    {
         int win_b_color;
         int win_w_color;
         XEvent xev;
@@ -117,9 +154,17 @@ int main(int argc, char *argv[])
         win_w_color = BlackPixel(display, DefaultScreen(display));
         window = XCreateSimpleWindow(display,DefaultRootWindow(display),0, 0, WIDTH, HEIGHT, 0,win_b_color, win_w_color);
         visual = DefaultVisual(display, 0);
-        Atom window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
-        long value = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+        
+        
+        //Atom window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
+        //long value = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+        //XChangeProperty(display, window, window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &value, 1);
+        
+        Atom window_type = XInternAtom(display, "_NET_WM_STATE", False);
+        long value = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
         XChangeProperty(display, window, window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &value, 1);
+
+        
         XSelectInput(display, window, ExposureMask | KeyPressMask);
         XMapWindow(display, window);
         XFlush(display);
