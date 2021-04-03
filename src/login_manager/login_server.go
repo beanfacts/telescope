@@ -71,7 +71,7 @@ func handleClientRequest(con net.Conn) {
 			var response Response
 
 			// to just query if the username exist
-			userSQL := fmt.Sprintf("SELECT username,password FROM UserTable WHERE username='%s' AND password='%s'",username,password)
+			userSQL := fmt.Sprintf("SELECT username,password FROM UserTable WHERE username='%s' AND password=SHA2('%s%s',256)",username,password,username)
 			err := db.QueryRow(userSQL).Scan(&response.Ip, &response.Permission)
 			if err != nil{
 				if err == sql.ErrNoRows {
