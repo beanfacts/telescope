@@ -202,8 +202,8 @@ int main(int argc, char* argv[])
     }
 
     initimage(&dst);
-    int dstwidth = width / 2;
-    int dstheight = height / 2;
+    int dstwidth = width ;
+    int dstheight = height ;
     
     if(!createimage(dsp, &dst, dstwidth, dstheight))
     {
