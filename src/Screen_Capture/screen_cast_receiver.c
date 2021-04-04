@@ -74,8 +74,8 @@ int main(int argc, char *argv[])
         win_w_color = BlackPixel(display, DefaultScreen(display));
         window = XCreateSimpleWindow(display,DefaultRootWindow(display),0, 0, WIDTH, HEIGHT, 0,win_b_color, win_w_color);
         visual = DefaultVisual(display, 0);
-        Atom window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
-        long value = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", False);
+        Atom window_type = XInternAtom(display, "_NET_WM_STATE", False);
+        long value = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
         XChangeProperty(display, window, window_type, XA_ATOM, 32, PropModeReplace, (unsigned char *) &value, 1);
         XSelectInput(display, window, ExposureMask | KeyPressMask);
         XMapWindow(display, window);
