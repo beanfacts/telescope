@@ -11,7 +11,7 @@ Install mysql Driver for golang
 Modify line 46 in login_server.go to connect to your own Database
 ## 3 Make sure your database is configured properly
 Make sure the database connected has the structure similar to this:  
-<img src="ComSysDB.png">
+<img src="UserDB.png">
 
 ## 4 Build
 You can either build the go file to a binary using
