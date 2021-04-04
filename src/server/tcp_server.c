@@ -92,28 +92,27 @@ bool process_input(ControlPacket pkt, Display *disp, Window xwin) {
 
 }
 
-// Function designed for chat between client and server. 
+
 void func(int sockfd) 
 { 
     
-    /* Open X11 display */
+    // Open the X11 display
     Display *Xdisp;
     Window Xrwin;
 
     Xdisp = XOpenDisplay(0);
     Xrwin = XRootWindow(Xdisp, 0);
     
-    //char buff[MAX]; 
+    // Allocate buffer size for reading
 	char *buff = calloc(MAX, sizeof(char));
     
     int n; 
     int size_b;
-    //printf("%ld \n", sizeof(buff));
-    // infinite loop for chat 
+
     for (;;) { 
-        memset(buff,0 ,MAX); 
+
+        memset(buff, 0, MAX); 
   
-        // read the message from client and copy it in buffer 
         read(sockfd, buff, 16); 
         if(buff[0] == 1 | buff[0] == 2) {
             size_b = 6;
@@ -123,37 +122,15 @@ void func(int sockfd)
             size_b = 9;
         }
 
+        // Decode packet and perform movement action
         ControlPacket pkt = decode_packet(buff, size_b);
         process_input(pkt, Xdisp, Xrwin);
         
-        // print buffer which contains the client contents 
-        //for(int i =0; i < size, ) 
-        //int *ptr = (int * )(buff+1);
-        //printf("From client: %d \t To client : \n", *(buff+0) ); 
-        
-        printf("tim ");
-
-        for(int i=0; i < size_b; i++){
-            printf("%hhx", *(buff+i));
-        }
-        
-        printf("\n");
-        
         memset(buff, 0,MAX); 
         n = 0; 
-        // copy server message in the buffer 
-        // while ((buff[n++] = getchar()) != '\n') 
-        //     ; 
-  
-        // and send that buffer to client
-        //*buff = "hello world"; 
+   
         write(sockfd, buff, sizeof(buff)); 
-  
-        // if msg contains "Exit" then server exit and chat ended. 
-        // if (strncmp("exit", buff, 4) == 0) { 
-        //     printf("Server Exit...\n"); 
-        //     break; 
-        // } 
+
     } 
 } 
   
@@ -169,7 +146,8 @@ int main(int argc, char **argv)
     int sockfd, connfd, len; 
     struct sockaddr_in servaddr, cli; 
   
-    // socket create and verification 
+    // Create socket and set up addresses
+
     sockfd = socket(AF_INET, SOCK_STREAM, 0); 
     if (sockfd == -1) { 
         printf("socket creation failed...\n"); 
@@ -181,20 +159,19 @@ int main(int argc, char **argv)
   
     int PORT = (short) atoi(argv[1]);
 
-    // assign IP, PORT 
     servaddr.sin_family = AF_INET; 
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
     servaddr.sin_port = htons(PORT); 
   
-    // Binding newly created socket to given IP and verification 
+    // Bind address
+
     if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
         printf("socket bind failed...\n"); 
         exit(0); 
     } 
     else
         printf("Socket successfully binded..\n"); 
-  
-    // Now server is ready to listen and verification 
+    
     if ((listen(sockfd, 5)) != 0) { 
         printf("Listen failed...\n"); 
         exit(0); 
@@ -203,7 +180,7 @@ int main(int argc, char **argv)
         printf("Server listening..\n"); 
     len = sizeof(cli); 
   
-    // Accept the data packet from client and verification 
+
     connfd = accept(sockfd, (SA*)&cli, &len); 
     if (connfd < 0) { 
         printf("server acccept failed...\n"); 
@@ -212,10 +189,7 @@ int main(int argc, char **argv)
     else
         printf("server acccept the client...\n"); 
   
-    // Function for chatting between client and server 
     func(connfd); 
-  
-    // After chatting close the socket 
     close(sockfd); 
     return 0;
 } 
