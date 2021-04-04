@@ -19,7 +19,8 @@ type Response struct{
 }
 
 func main() {
-	listener, err := net.Listen("tcp", "0.0.0.0:6970")
+	// listen to all ips because 0.0.0.0
+	listener, err := net.Listen("tcp", "0.0.0.0:6968")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -29,6 +30,7 @@ func main() {
 
 
 	for { // while loop cus go has no while loop
+		// accept all clients trying to access
 		con, err := listener.Accept()
 		// handle errors
 		if err != nil {
@@ -61,19 +63,22 @@ func handleClientRequest(con net.Conn) {
 
 		switch err {
 		case nil:
-			// if there is no error trim spaces and stuff then print out the request
+			// if there is no error trim spaces and stuff
 			clientRequest := strings.TrimSpace(clientRequest)
 
 			// split username and password string
+			// string comes in as comma delimited
 			data := strings.Split(clientRequest,",")
 			username, password := data[0], data[1]
-			log.Print(username,password)
+			// create a response struct
 			var response Response
 
 			// to just query if the username exist
 			userSQL := fmt.Sprintf("SELECT username,password FROM UserTable WHERE username='%s' AND password=SHA2('%s%s',256)",username,password,username)
+			// bind value to response struct cus go wont let me use _ and i dont need the values
 			err := db.QueryRow(userSQL).Scan(&response.Ip, &response.Permission)
 			if err != nil{
+				// if the usersQL returns NoRow error reply to the client that username or password is wrong
 				if err == sql.ErrNoRows {
 					response.Ip = "unameerror"
 					response.Permission = "none"
@@ -86,18 +91,19 @@ func handleClientRequest(con net.Conn) {
 				if err != nil {
 					log.Println(err)
 				}
-
+				// print the json data
 				log.Print(string(jsonData))
 				// Responding to the client request
 				if _, err = con.Write(jsonData); err != nil {
 					log.Printf("failed to respond to client: %v\n", err)
 				}
 			} else {
+				// get the id and permission for the username and password
 				SQL := fmt.Sprintf("SELECT ip, permissions FROM ServerUser JOIN Servers S on ServerUser.server_id = S.id JOIN UserTable UT on UT.id = ServerUser.user_id WHERE UT.username ='%s' AND UT.password=SHA2('%s%s',256);", username, password, username)
 
 				err := db.QueryRow(SQL).Scan(&response.Ip, &response.Permission)
-
 				if err != nil {
+					// if the server cannot find a ip and permission reply to the client that server has not been assigned
 					if err == sql.ErrNoRows {
 						response.Ip = "servererror"
 						response.Permission = "none"
@@ -105,7 +111,8 @@ func handleClientRequest(con net.Conn) {
 						log.Fatal(err)
 					}
 				}
-				log.Printf("%s,%s\n", response.Ip,response.Permission)
+				//log.Printf("%s,%s\n", response.Ip,response.Permission)
+				// make the struct into a json object
 				jsonData, err := json.Marshal(response)
 				if err != nil {
 					log.Println(err)

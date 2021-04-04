@@ -68,12 +68,12 @@ int main(int argc, char const *argv[]) {
             printf("Server Assignment Failed\n");
         }
         else {
-            char *args[] = {"./dumb_client", json_object_get_string(ip), json_object_get_string(permission), NULL};
+            char *args[] = {"./client", json_object_get_string(ip), 6969,json_object_get_string(permission), NULL};
             execvp(args[0], args);
         }
         return 0;
     }
     else{
-        printf("Usage: ./login_client <ip address>\n");
+        printf("Usage: ./login_client <login server ip address>\n");
     }
 }
