@@ -61,63 +61,55 @@ void get_center(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *re
 static void setCursor (xcb_connection_t*, xcb_screen_t*, xcb_window_t, int);
 static void testCookie(xcb_void_cookie_t, xcb_connection_t*, char *); 
 
-    static void
-    testCookie (xcb_void_cookie_t cookie,
-                xcb_connection_t *connection,
-                char *errMessage )
+static void testCookie (xcb_void_cookie_t   cookie,
+                        xcb_connection_t    *connection,
+                        char                *errMessage )
     {   
         xcb_generic_error_t *error = xcb_request_check (connection, cookie);
         if (error) {
             fprintf (stderr, "ERROR: %s : %d\n", errMessage , error->error_code);
             xcb_disconnect (connection);
             exit (-1);
-        }   
-    }   
-
-
-
-    static void
-    setCursor (xcb_connection_t *connection,
-                xcb_screen_t     *screen,
-                xcb_window_t      window,
-                int               cursorId )
-    {
-        xcb_font_t font = xcb_generate_id (connection);
-        xcb_void_cookie_t fontCookie = xcb_open_font_checked (connection,
-                                                              font,
-                                                              strlen ("cursor"),
-                                                              "cursor" );
-        testCookie (fontCookie, connection, "can't open font");
-
-        xcb_cursor_t cursor = xcb_generate_id (connection);
-        xcb_create_glyph_cursor (connection,
-                                 cursor,
-                                 font,
-                                 font,
-                                 cursorId,
-                                 cursorId + 1,
-                                 0, 0, 0, 0, 0, 0 );
-
-        xcb_gcontext_t gc = xcb_generate_id (connection);
-
-        uint32_t mask = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_FONT;
-        uint32_t values_list[3];
-        values_list[0] = screen->black_pixel;
-        values_list[1] = screen->white_pixel;
-        values_list[2] = font;
-
-        xcb_void_cookie_t gcCookie = xcb_create_gc_checked (connection, gc, window, mask, values_list);
-        testCookie (gcCookie, connection, "can't create gc");
-
-        mask = XCB_CW_CURSOR;
-        uint32_t value_list = cursor;
-        xcb_change_window_attributes (connection, window, mask, &value_list);
-
-        xcb_free_cursor (connection, cursor);
-
-        fontCookie = xcb_close_font_checked (connection, font);
-        testCookie (fontCookie, connection, "can't close font");
+        }
     }
+
+static void setCursor (xcb_connection_t *connection,
+                        xcb_screen_t     *screen,
+                        xcb_window_t      window,
+                        int               cursorId )
+{
+    xcb_font_t font = xcb_generate_id (connection);
+    xcb_void_cookie_t fontCookie = xcb_open_font_checked (connection, font, strlen ("cursor"), "cursor");
+    testCookie (fontCookie, connection, "can't open font");
+
+    xcb_cursor_t cursor = xcb_generate_id (connection);
+    xcb_create_glyph_cursor (connection,
+                                cursor,
+                                font,
+                                font,
+                                cursorId,
+                                cursorId + 1,
+                                0, 0, 0, 0, 0, 0 );
+    xcb_gcontext_t gc = xcb_generate_id (connection);
+
+    uint32_t mask = XCB_GC_FOREGROUND | XCB_GC_BACKGROUND | XCB_GC_FONT;
+    uint32_t values_list[3];
+    values_list[0] = screen->black_pixel;
+    values_list[1] = screen->white_pixel;
+    values_list[2] = font;
+
+    xcb_void_cookie_t gcCookie = xcb_create_gc_checked (connection, gc, window, mask, values_list);
+    testCookie (gcCookie, connection, "can't create gc");
+
+    mask = XCB_CW_CURSOR;
+    uint32_t value_list = cursor;
+    xcb_change_window_attributes (connection, window, mask, &value_list);
+
+    xcb_free_cursor (connection, cursor);
+
+    fontCookie = xcb_close_font_checked (connection, font);
+    testCookie (fontCookie, connection, "can't close font");
+}
 
 void func2(int sockfd, char *buff, int size) 
 { 
@@ -204,146 +196,104 @@ void func(int sockfd , Display *display,Visual *visual,Window *window,GC gc)
             memset(buff,0, MAX); 
             
             switch (event->response_type & ~0x80)
-			{
-			case XCB_MOTION_NOTIFY:{
-			xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)event;
-			get_center(c, window2, &cenx, &ceny);
-            new_x = motion->event_x;	
-			new_y = motion->event_y;
+            {
+                case XCB_MOTION_NOTIFY:{
+                    xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)event;
+                    get_center(c, window2, &cenx, &ceny);
+                    new_x = motion->event_x;	
+                    new_y = motion->event_y;
 
-			deltax = new_x - pre_x;
-			deltay = new_y - pre_y;
+                    deltax = new_x - pre_x;
+                    deltay = new_y - pre_y;
 
-			pre_x = motion->event_x;
-			pre_y = motion->event_y;
-			
-            if (((deltax!=0) && (deltay != 0))&&(flag == 0)){
-
-            flag = 1;
-              
-            printf("(%d : %d)\n", deltax, deltay);
-
-            mouse_mov[0] = (char) 0;
-
-
-            int *ptr2 = (int *)(&mouse_mov[1]);
-            *ptr2 = deltax;
-
-            int *ptr3 = (int *)(&mouse_mov[5]);
-            *ptr3 = deltay; 
-            func2(sockfd,mouse_mov,9); 
-            bzero(mouse_mov, 9);
-            }
-            else if(flag == 1){
-                flag = 0;
-            }
-
-            xcb_warp_pointer(c, screen->root, window2, 0,0,0,0, cenx, ceny); 
-            
-			break;
-            	
-			}
-
-
-			case XCB_BUTTON_RELEASE: {
-                xcb_button_release_event_t *br = (xcb_button_release_event_t *)event;
-                printf ("Button %d released\n", br->detail);
-
-                mouse_but[0] = (char) 1;
-
-                int *ptr6 = (int *)(&mouse_but[1]);
-                *ptr6 = br->detail;
-
-                mouse_but[5] = (char) 0;
-                func2(sockfd, mouse_but, 6); 
-                bzero(mouse_but, 6);
-
-                break;
-            }
-
-			case XCB_KEY_PRESS: {
-                xcb_key_press_event_t *kp = (xcb_key_press_event_t *)event;
-                //printf("event type: %d", event->response_type);
-                printf ("Key pressed in window %d\n", kp->detail);
-
-                keyboard[0] = (char) 2;
-
-                int *ptr = (int *)(&keyboard[1]);
-                *ptr =  kp->detail;
-
-                keyboard[5] = (char) 1;
-
-                func2(sockfd,keyboard, 6);
-                break;
-            }
-
-			case XCB_KEY_RELEASE: {
-                xcb_key_release_event_t *kr = (xcb_key_release_event_t *)event;
-                
-
-                printf ("Key released in window %d\n", kr->detail);
-
-                keyboard[0] = (char) 2;
-
-                int *ptr = (int *)(&keyboard[1]);
-                *ptr =  kr->detail;
-
-                keyboard[5] = (char) 0;
-
-                func2(sockfd,keyboard, 6);
-                bzero(keyboard, 6);
-
-
-                break;
-            }
-
-            case XCB_ENTER_NOTIFY:{
-                xcb_xfixes_hide_cursor(c, screen->root);
-                //printf("event type: %d", event->response_type);
-                printf("enter\n");
-                break;
-            }
-
-            case XCB_LEAVE_NOTIFY:{
-                xcb_xfixes_show_cursor(c, screen->root);
-                setCursor (c, screen, window2, 58);
-                //printf("event type: %d", event->response_type);
-                printf("leave\n");
-                break;
-            }
-			case XCB_BUTTON_PRESS: {
-                
-				xcb_button_press_event_t *bp = (xcb_button_press_event_t *)event;
-                //printf("event type: %d", event->response_type);
+                    pre_x = motion->event_x;
+                    pre_y = motion->event_y;
+                    
+                    if (((deltax!=0) && (deltay != 0))&&(flag == 0)){
+                        flag = 1;
+                        printf("(%d : %d)\n", deltax, deltay);
+                        mouse_mov[0] = (char) 0;
+                        int *ptr2 = (int *)(&mouse_mov[1]);
+                        *ptr2 = deltax;
+                        int *ptr3 = (int *)(&mouse_mov[5]);
+                        *ptr3 = deltay; 
+                        func2(sockfd,mouse_mov,9); 
+                        bzero(mouse_mov, 9);
+                    }
+                    else if(flag == 1){
+                        flag = 0;
+                    }
+                    xcb_warp_pointer(c, screen->root, window2, 0,0,0,0, cenx, ceny);
+                    break;	
+                }
+                case XCB_BUTTON_RELEASE: {
+                    xcb_button_release_event_t *br = (xcb_button_release_event_t *)event;
+                    printf ("Button %d released\n", br->detail);
+                    mouse_but[0] = (char) 1;
+                    int *ptr6 = (int *)(&mouse_but[1]);
+                    *ptr6 = br->detail;
+                    mouse_but[5] = (char) 0;
+                    func2(sockfd, mouse_but, 6); 
+                    bzero(mouse_but, 6);
+                    break;
+                }
+                case XCB_KEY_PRESS: {
+                    xcb_key_press_event_t *kp = (xcb_key_press_event_t *)event;
+                    printf ("Key pressed in window %d\n", kp->detail);
+                    keyboard[0] = (char) 2;
+                    int *ptr = (int *)(&keyboard[1]);
+                    *ptr =  kp->detail;
+                    keyboard[5] = (char) 1;
+                    func2(sockfd,keyboard, 6);
+                    break;
+                }
+                case XCB_KEY_RELEASE: {
+                    xcb_key_release_event_t *kr = (xcb_key_release_event_t *)event;
+                    printf ("Key released in window %d\n", kr->detail);
+                    keyboard[0] = (char) 2;
+                    int *ptr = (int *)(&keyboard[1]);
+                    *ptr =  kr->detail;
+                    keyboard[5] = (char) 0;
+                    func2(sockfd,keyboard, 6);
+                    bzero(keyboard, 6);
+                    break;
+                }
+                case XCB_ENTER_NOTIFY:{
+                    xcb_xfixes_hide_cursor(c, screen->root);
+                    //printf("event type: %d", event->response_type);
+                    printf("enter\n");
+                    break;
+                }
+                case XCB_LEAVE_NOTIFY:{
+                    xcb_xfixes_show_cursor(c, screen->root);
+                    setCursor (c, screen, window2, 58);
+                    //printf("event type: %d", event->response_type);
+                    printf("leave\n");
+                    break;
+                }
+                case XCB_BUTTON_PRESS: {
+                    xcb_button_press_event_t *bp = (xcb_button_press_event_t *)event;
+                    //printf("event type: %d", event->response_type);
                     printf ("Button %d pressed\n", bp->detail );
-
-                mouse_but[0] = (char) 1;
-
-                int *ptr5 = (int *)(&mouse_but[1]);
-                *ptr5 = bp->detail;
-
-                mouse_but[5] = (char) 1;
-                func2(sockfd, mouse_but, 6); 
-                bzero(mouse_but, 6);
-                break;
-                
-                
-			}			
-			default:{
-				printf ("Unknown event: %d\n",
-                        event->response_type);
-                break;
-			}
-            
+                    mouse_but[0] = (char) 1;
+                    int *ptr5 = (int *)(&mouse_but[1]);
+                    *ptr5 = bp->detail;
+                    mouse_but[5] = (char) 1;
+                    func2(sockfd, mouse_but, 6); 
+                    bzero(mouse_but, 6);
+                    break;
+                }			
+                default:{
+                    fprintf (stderr, "Unknown event: %d\n", event->response_type);
+                    break;
+                }
+            }
         }
-
-
-        }
-        if (length){
+        if (length){ 
             printf("%d\n", framebytes); 
         }
-    } 
-} 
+    }
+}
 
 int main(int argc, char *argv[]) 
 {   
@@ -375,7 +325,7 @@ int main(int argc, char *argv[])
         struct sockaddr_in servaddr, cli; 
         sockfd = rsocket(AF_INET, SOCK_STREAM, 0); 
         if (sockfd == -1) { 
-            printf("socket creation failed...\n"); 
+            fprintf(stderr, "socket creation failed...\n"); 
             exit(0); 
         } 
         else
@@ -385,7 +335,7 @@ int main(int argc, char *argv[])
         servaddr.sin_addr.s_addr = inet_addr(argv[1]); 
         servaddr.sin_port = htons(atoi(argv[2])); 
         if (rconnect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
-            printf("connection with the server failed...\n"); 
+            fprintf(stderr, "connection with the server failed...\n"); 
             exit(0); 
         } 
         else{
@@ -396,34 +346,33 @@ int main(int argc, char *argv[])
             setsockopt(sockfd,6,TCP_NODELAY, flags, sizeof(flags));
             
             if (argc < 2) {
-                printf("Please specify ip address argument\n");
+                fprintf(stderr, "please specify ip address argument.\n");
                 exit(1);
             }
 
             if (tsockfd == -1) { 
-                printf("socket creation failed...\n"); 
+                fprintf(stderr, "socket creation failed...\n"); 
                 exit(0); 
-            } 
+            }
             else
                 printf("Socket successfully created..\n"); 
             memset(&servaddr, 0,sizeof(servaddr)); 
 
             printf("Trying to connect to %s\n", argv[1]);
-
-            // assign IP, PORT 
+            // assign IP, PORT
             servaddr.sin_family = AF_INET; 
             servaddr.sin_addr.s_addr = inet_addr(argv[1]); 
-            servaddr.sin_port = htons(PORT);   
-
-            // connect the client socket to server socket 
-            if (connect(tsockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
-                printf("connection with the server failed...\n"); 
-                exit(0); 
+            servaddr.sin_port = htons(PORT);
+            // connect the client socket to server socket
+            if (connect(tsockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
+                fprintf(stderr, "connection with the server failed...\n");
+                exit(0);
             } 
-            else
+            else{
                 printf("connected to the server..\n");    
                 func(tsockfd, display,visual,&window,gc); 
-                rclose(tsockfd); 
+                rclose(tsockfd);
+            }
         }
     }
 } 
