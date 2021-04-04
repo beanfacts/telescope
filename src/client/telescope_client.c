@@ -147,39 +147,8 @@ void send_input(int sockfd, char *buff, int size)
 void *capture_mouse_keyboard(void *args) {
 
     mouse_param *mouse_kb = (mouse_param*) args;
-    
-    /*
-    uint32_t     mask      = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-    uint32_t     values[2] = {
-        mouse_kb->screen->white_pixel,
-        XCB_EVENT_MASK_POINTER_MOTION
-        | XCB_EVENT_MASK_BUTTON_PRESS 
-        | XCB_EVENT_MASK_BUTTON_RELEASE
-        | XCB_EVENT_MASK_KEY_PRESS
-        | XCB_EVENT_MASK_KEY_RELEASE
-        | XCB_EVENT_MASK_ENTER_WINDOW
-        | XCB_EVENT_MASK_LEAVE_WINDOW
-    };
-    
-    xcb_create_window(mouse_kb->c,    
-                    0,                            
-                    mouse_kb->xcb_window,                        
-                    mouse_kb->screen->root,                  
-                    0, 0,                          
-                    WIDTH, HEIGHT,                      
-                    10,                            
-                    XCB_WINDOW_CLASS_INPUT_OUTPUT, 
-                    mouse_kb->screen->root_visual,           
-                    mask, values);   
-
-    */
             
-    int cenx, ceny;
-    //xcb_map_window(mouse_kb->c, mouse_kb->x11_window);
-    //xcb_unmap_window(mouse_kb->c, mouse_kb->x11_window);
-    //XUnmapWindow(mouse_kb->display, mouse_kb->x11_window);
-    //xcb_flush(mouse_kb->c);
-    
+    int cenx, ceny;  
     xcb_xfixes_query_version(mouse_kb->c,4,0);
     xcb_xfixes_show_cursor(mouse_kb->c, mouse_kb->x11_window);
     int flag = 0;
@@ -192,16 +161,6 @@ void *capture_mouse_keyboard(void *args) {
     char *mouse_but = malloc(6);
     char *keyboard = malloc(6);
     
-    /*
-    xcb_generic_event_t* evt;
-    while (1) {
-        evt = xcb_poll_for_event(mouse_kb->c);
-        if (evt) {
-            printf("evt = %d\n", evt->response_type & ~0x80);
-        }
-    }
-    */
-
     while(event = xcb_wait_for_event (mouse_kb->c)) {
 
         switch (event->response_type & ~0x80)
@@ -231,14 +190,6 @@ void *capture_mouse_keyboard(void *args) {
                 mouse_mov[0] = (char) 0;
                 *(int *) (&mouse_mov[1]) = deltax;
                 *(int *) (&mouse_mov[5]) = deltay;
-
-                /*
-                int *ptr2 = (int *)(&mouse_mov[1]);
-                *ptr2 = &deltax;
-
-                int *ptr3 = (int *)(&mouse_mov[5]);
-                *ptr3 = &deltay;
-                */
 
                 send_input(mouse_kb->sockfd, mouse_mov, 9); 
                 memset(mouse_mov, 0, 9);
@@ -305,6 +256,8 @@ void *capture_mouse_keyboard(void *args) {
                 break;
             }
 
+            // todo: will fix later
+            
             case XCB_ENTER_NOTIFY:{
                 /*xcb_xfixes_hide_cursor(mouse_kb->c, mouse_kb->screen->root);
                 printf("enter\n");
@@ -345,12 +298,10 @@ void *capture_mouse_keyboard(void *args) {
        
 }
 
-        
-    
 
 XImage *create_ximage(Display *display, Visual *visual, int width, int height, char *image)
 {
-    return XCreateImage(display, visual, 24,ZPixmap, 0, image, width, height, 32, 0);
+    return XCreateImage(display, visual, 24, ZPixmap, 0, image, width, height, 32, 0);
 }
 
 int putimage(char *image, Display *display, Visual *visual, Window window, GC gc)
@@ -360,13 +311,15 @@ int putimage(char *image, Display *display, Visual *visual, Window window, GC gc
     bool exit = false;
     int r;
     r = XPutImage(display, window, gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT);
-    printf("RES: %i\n", r);
+    if (r) {
+        print("Error occurred while displaying X11 image (%d)", r);
+    }
     return 0;
 }
 
+
 void *func(void *args) 
 {
-    //screen_param *cap_screen
     screen_param *cap_screen = (screen_param *) args;
     char *buff=calloc(MAX,1); 
     int n; 
@@ -387,7 +340,9 @@ void *func(void *args)
         }
         else
         {
-            //fprintf(stderr, "Error reading from socket.\n");
+            fprintf(stderr, "Error reading from socket.\n");
+            exit(1);
+            // should make it exit gracefully but problem for future
         }
     } 
 } 
@@ -453,9 +408,6 @@ int main(int argc, char *argv[])
         XFlush(display);
         
         gc = XCreateGC(display, window, 0, NULL);
-
-        //xcb_screen_t *screen2 = xcb_setup_roots_iterator(xcb_get_setup (c)).data;    
-        //xcb_window_t xcb_window = xcb_generate_id(c);
         
         /* Create connection objects for RDMA + TCP */
 
@@ -545,5 +497,4 @@ int main(int argc, char *argv[])
 
         exit(0);
     }
-} 
-
+}
