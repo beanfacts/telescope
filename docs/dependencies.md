@@ -1,4 +1,4 @@
-# Dependancies
+# Dependencies
 ## 1. Xlib
 ### Use:  
 For getting display image through Xshm

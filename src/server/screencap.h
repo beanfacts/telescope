@@ -15,7 +15,7 @@ struct shmimage
 {
     XShmSegmentInfo shminfo ;
     XImage * ximage ;
-    unsigned int * data ; // will point to the image's BGRA packed pixels
+    unsigned int * data ;
 };
 
 void initimage(struct shmimage* image);
