@@ -65,7 +65,7 @@ typedef struct {
     int dpy_index;      // Requested display index
     int chroma;         // Requested subsampling of the image contents
     off_t offset;       // Memory region on the client side
-    int buf_index       // Buffer index to write to
+    int buf_index;      // Buffer index to write to
 } T_WriteReq;
 
 /* Memory buffer information */

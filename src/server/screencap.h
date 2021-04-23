@@ -20,7 +20,7 @@ struct shmimage
 
 void initimage(struct shmimage* image);
 void destroyimage(Display* dsp, struct shmimage* image);
-int createimage(Display* dsp, struct shmimage* image, int width, int height);
+int createimage(Display* dsp, struct shmimage* image, int width, int height, int bpp);
 void getrootwindow(Display* dsp, struct shmimage* image, int screen_no, int screen_width);
 int get_frame(struct shmimage* src, struct shmimage* dst);
 

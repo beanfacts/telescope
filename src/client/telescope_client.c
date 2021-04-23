@@ -30,7 +30,7 @@
 #include <sys/shm.h>
 #include <X11/extensions/XShm.h>
 
-#include "rdma_common.h"
+#include "../common/rdma_common.h"
 
 #define MAX 10000000 
 #define PORT 6969  
@@ -354,10 +354,13 @@ int main(int argc, char *argv[])
         && init_attr.qp_type == IBV_QPT_RC))
     {
         fprintf(stderr, 
-            "Connection does not support features required by Telescope:\n"
-            "Max inline data: %d\t(req. %d)\n"
-            "Max send SGEs:   %d\t(req. %d)\n"
-            "QP Type:         %d\t(req. %d)\n"
+                "Connection does not support features required by Telescope:\n"
+                "Max inline data: %d\t(req. %d)\n"
+                "QP Type:         %d\t(req. %d - IBV_QPT_RC)\n"
+                "Max send SGEs:   %d\t(req. %d)\n",
+                init_attr.cap.max_inline_data, 256, 
+                init_attr.qp_type, IBV_QPT_RC,
+                init_attr.cap.max_send_sge, 2
         );
         rdma_destroy_ep(connid);
         return 1;
@@ -371,7 +374,7 @@ int main(int argc, char *argv[])
     while(1)
     {
         strcpy(hello, "Hello server!");
-        printf("Sending %s\n", hello);
+        printf("Sending %s\n", (char *) hello);
         rdma_post_send(connid, NULL, hello, 256, send_mr, IBV_SEND_INLINE);
         while ((ret = rdma_get_send_comp(connid, &wc)) == 0);
         if (ret < 0) {

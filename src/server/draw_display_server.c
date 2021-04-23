@@ -11,6 +11,7 @@
 #include <X11/Xutil.h>
 
 #include <X11/extensions/XShm.h>
+#include <X11/extensions/XTest.h>
 #include <sys/socket.h> 
 
 #include <sys/time.h>
@@ -27,7 +28,6 @@
 #include "screencap.h"
 #include "screencap.c"
 #include "../common/rdma_common.h"
-#include "../common/queue_safe.h"
 
 #include <fcntl.h>
 
@@ -184,7 +184,7 @@ void *control(void *void_args)
     }
 
     // Poll for RDMA receive completion
-    while ((ret = rdma_get_recv_comp(args->connid, &rcv_wc)) == 0)
+    while ((ret = rdma_get_recv_comp(args->connid, rcv_wc)) == 0)
     {
         usleep(args->poll_usec);
     }
@@ -193,7 +193,7 @@ void *control(void *void_args)
         fprintf(stderr, "Error receiving data from the client.\n");
     }
     printf("Received data!!!!!!!!!!!!\n");
-    printf("Server said: %s", args->rcv_buf);
+    printf("Server said: %s", (char *) args->rcv_buf);
 
 }
 
@@ -396,8 +396,11 @@ int main(int argc, char* argv[])
             fprintf(stderr, 
                 "Connection does not support features required by Telescope:\n"
                 "Max inline data: %d\t(req. %d)\n"
-                "QP Type:         %d\t(req. %d)\n"
-                "Max send SGEs:   %d\t(req. %d)\n"
+                "QP Type:         %d\t(req. %d - IBV_QPT_RC)\n"
+                "Max send SGEs:   %d\t(req. %d)\n",
+                conn_attr.cap.max_inline_data, 256, 
+                conn_attr.qp_type, IBV_QPT_RC,
+                conn_attr.cap.max_send_sge, 2
             );
             rdma_destroy_ep(connid);
             continue;

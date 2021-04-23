@@ -49,7 +49,7 @@ int createimage(Display *dsp, struct shmimage *image, int width, int height, int
 
     // Find the memory region of the shared memory segment
     image->shminfo.shmaddr = shmat(image->shminfo.shmid, 0, 0);
-    if (image->shminfo.shmaddr == -1)
+    if (image->shminfo.shmaddr == (char *) -1)
     {
         fprintf(stderr, "Error allocating X shared memory segment.\n");
         return false;
@@ -60,7 +60,7 @@ int createimage(Display *dsp, struct shmimage *image, int width, int height, int
 
     // If X11 forwarding is used, the attachment may fail since the display
     // isn't using the same memory region
-    image->data = (char *) image->shminfo.shmaddr;
+    image->data = (unsigned int *) image->shminfo.shmaddr;
     image->shminfo.readOnly = false;
     
     // Finally, tell X11 to use the shared memory segment
