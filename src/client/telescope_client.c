@@ -254,136 +254,8 @@ void *user_setup(int connfd)
 {
     // Request the available displays.
     T_MsgHeader *hdr = (T_MsgHeader *) calloc(1, sizeof(T_MsgHeader));
-    hdr->msg_type = T_REQ_SCREEN_DATA
+    hdr->msg_type = T_REQ_SCREEN_DATA;
 }
-
-
-void *run_capture(void *args_void) 
-{
-    
-    screen_param args = (screen_param *) args_void;
-    // Set up client resources for RDMA operations
-    int ret;
-    
-    // Get the available displays from the server
-    T_List *dpy_list;
-    T_ScreenData *dpy;
-    dpy_list = get_displays(args.sockfd);
-    if (dpy_list)
-    {
-        dpy = (T_ScreenData *) dpy_list->data;
-        for (int i = 0; i < dpy_list->elements; i++)
-        {
-            printf(
-                "X Screen %d @ %d,%d\n"
-                "    Resolution: %d x %d @ %d bpp\n",
-                dpy->screen_index, dpy->screen_offset_x, dpy->screen_offset_y,
-                dpy->width, dpy->height, dpy->bits_per_pixel
-            );
-            dpy++;
-        }
-    }
-
-    // Allow the user to select the display to stream from the server
-    int screen_index = -1;
-    int ret = 0;
-    while (!ret && screen_index < 0)
-    {
-        printf("Select screen index: ");
-        ret = scanf("%d", &screen_index);
-    }
-    
-    /*  Before sending the request to the server, the memory region we want the
-        server to write to has to be pinned and mapped for rsockets to use.
-        The client creates a buffer twice the required size, to allow the server
-        to write data while the client is busy rendering the image, without the
-        risk of image data corruption. Each image also has a header with some
-        metadata about the image, as a confirmation for the client.
-    */
-    dpy = (T_ScreenData *) dpy_list->data;
-    int buf_size = -1;
-    for (int i = 0; i < dpy_list->elements; i++)
-    {
-        if (dpy->screen_index == screen_index)
-        {
-            buf_size = dpy->height * dpy->width * (dpy->bits_per_pixel / 8) * 2;
-            buf_size += sizeof(T_ScreenData);
-            break;
-        }
-        dpy++;
-    }
-
-    // todo: perform memcpy!!!! then free!!
-
-    /*  The buffer size is pinned and mapped for RDMA remote operations.
-        Note the client must have permissions to pin the amount of memory
-        required for these operations.
-    */
-    if (buf_size)
-    {
-        void *buf = malloc(buf_size);
-        if (buf)
-        {
-            // Let rsocket choose an available offset to be used
-            off_t frame_offset = riomap(args.sockfd, buf, buf_size, PROT_WRITE, 0, -1);
-            if (frame_offset)
-            {
-                /*  To service a client, the server must first allocate its own buffer
-                    for the storage of image data. The display with specified index
-                    is requested for the server to prepare.
-                */
-                ret = prepare_image(args.sockfd, dpy->screen_index, CHR_ASIS);
-                if (!ret)
-                {
-                    fprintf(stderr, "Server did not respond to image preparation request.\n");
-                }
-            }
-        }
-        else
-        {
-            fprintf(stderr, "Could not allocate %d kiB of memory for image data.\n", buf_size / 1024);
-        }
-    }
-
-    /*  Now that the server is prepared, the client has to prepare to receive
-        the data requested. First, X11 on the client side is prepared to receive
-        the incoming image data. Note that in this case, the format XYBitmap must
-        be used to eliminate the need to transfer the alpha plane.
-    */
-    XShmSegmentInfo xshm_info;
-    XImage *img = XShmCreateImage(
-        args.display, args.visual, 24, XYBitmap,
-        NULL, &xshm_info, dpy->width, dpy->height);
-    xshm_info.shmid = shmget(IPC_PRIVATE, dpy->width * dpy->height * (dpy->bits_per_pixel / 8), 0700);
-    xshm_info.shmaddr = shmat(xshm_info.shmid, 0, 0);
-    xshm_info.readOnly = False;
-
-    // todo: put the image then save it
-
-    screen_param *cap_screen = (screen_param *) args;
-    char *buff=calloc(MAX,1); 
-    int n; 
-    int length;
-    int framebytes = 0;
-    int maxbytes = WIDTH*HEIGHT*4;
-    while (1) {
-        length = rread(cap_screen->sockfd, buff+framebytes , maxbytes-framebytes);
-        if (length > 0) {
-            printf("Reading %d\n", framebytes);
-            framebytes = framebytes + length;
-            if (framebytes >= maxbytes) {
-                printf("> %d", framebytes);
-                framebytes = 0;
-                putimage(buff, cap_screen->display, cap_screen->visual, cap_screen->x11_window, cap_screen->gc);
-                memset(buff,0, MAX); 
-            }
-        }
-        else
-        {
-            //fprintf(stderr, "Error reading from socket.\n");
-        }
-    } 
-} 
 
 
 int main(int argc, char *argv[]) 
@@ -491,6 +363,24 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    void *hello = calloc(256, 1);
+    int send_flags;
+    struct ibv_mr *send_mr = rdma_reg_msgs(connid, hello, 256);
+    struct ibv_wc wc;
+
+    while(1)
+    {
+        strcpy(hello, "Hello server!");
+        printf("Sending %s\n", hello);
+        rdma_post_send(connid, NULL, hello, 256, send_mr, IBV_SEND_INLINE);
+        while ((ret = rdma_get_send_comp(connid, &wc)) == 0);
+        if (ret < 0) {
+            fprintf(stderr, "Error sending data\n");
+        }
+        usleep(1000000);
+    }
+
+    /*
     // The RDMA connection is ready for use.
     // Since RDMA CM is thread safe, there is no need for extra
     // synchronization between the two different threads.
@@ -508,7 +398,6 @@ int main(int argc, char *argv[])
     mouse_config->sockfd = tcp_fd;
     mouse_config->display = display;
 
-    /*
     // Create a TCP connection.
     
     int tcp_fd;

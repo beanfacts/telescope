@@ -14,7 +14,11 @@
 #include <sys/socket.h> 
 
 #include <sys/time.h>
-#include <rdma/rsocket.h>
+
+#include <rdma/rdma_cma.h>
+#include <rdma/rdma_verbs.h>
+#include <infiniband/verbs.h>
+
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -28,6 +32,7 @@
 #include <fcntl.h>
 
 #define __T_DEBUG__
+
 
 typedef struct 
 {
@@ -49,7 +54,17 @@ typedef struct {
     int press_state;        // State; 0 -> released, 1 -> pressed
 } ControlPacket;
 
-void *rdma_buf;
+
+typedef struct
+{
+    struct rdma_cm_id   *connid;        // RDMA connection identifier
+    Display             *dsp;           // X11 display
+    XImage              *ximage;
+    void                *rcv_buf;
+    int                 rcv_bufsize;
+    int                 poll_usec;
+} ControlArgs;
+
 
 Window createwindow(Display * dsp, int width, int height)
 {
@@ -61,11 +76,12 @@ Window createwindow(Display * dsp, int width, int height)
                                    0, 0, width, height, 0,
                                    DefaultDepth(dsp, XDefaultScreen(dsp)),
                                    InputOutput, CopyFromParent, mask, &attributes);
-    XStoreName(dsp, window, NAME);
+    XStoreName(dsp, window, "server");
     XSelectInput(dsp, window, StructureNotifyMask);
     XMapWindow(dsp, window);
     return window;
 }
+
 
 void destroywindow(Display * dsp, Window window)
 {
@@ -146,227 +162,38 @@ bool process_input(ControlPacket pkt, Display *disp, Window xwin) {
 }
 
 
-void *func(void* args) 
-{ 
-    uint16_t port_number = *(uint16_t *) args + 1;
-    int fd_tcp, connfd2, len2; 
-    struct sockaddr_in servaddr2, cli2; 
-
-    /*  Create a TCP socket for transmission of keyboard and mouse data
-        over the network
-    */
-    fd_tcp = socket(AF_INET, SOCK_STREAM, 0); 
-    if (fd_tcp == -1) { 
-        printf("TCP failed to create socket\n"); 
-        exit(0); 
-    } 
-    else
-    {
-        printf("TCP socket created successfully\n"); 
-    }
-        
-    memset(&servaddr2, 0, sizeof(servaddr2)); 
-
-    servaddr2.sin_family = AF_INET; 
-    servaddr2.sin_addr.s_addr = htonl(INADDR_ANY); 
-    servaddr2.sin_port = htons(port_number);
-
-    if ((bind(fd_tcp, (SA*)&servaddr2, sizeof(servaddr2))) != 0) { 
-        printf("TCP socket bind failed\n"); 
-        exit(0); 
-    } 
-    else
-        printf("TCP socket successfully binded\n"); 
-
-    if ((listen(fd_tcp, 5)) != 0) { 
-        printf("TCP socket listen failed\n"); 
-        exit(0); 
-    } 
-    else
-        printf("TCP server listening\n");
-    len2 = sizeof(cli2);
-
-    connfd2 = accept(fd_tcp, (SA*)&cli2, &len2);
-    if (connfd2 < 0) {
-        printf("TCP failed to accept\n");
-        exit(0);
-    }
-    else
-        printf("TCP client accepted\n");
-    
-    /* Open X11 display */
-    Display *Xdisp;
-    Window Xrwin;
-
-    Xdisp = XOpenDisplay(0);
-    Xrwin = XRootWindow(Xdisp, 0);
-
-	char *buff = calloc(MAX, sizeof(char));
-
-    int n; 
-    int size_b;
-
-    while (1) { 
-        memset(buff, 0, MAX); 
-        // read the message from client and copy it in buffer 
-        read(connfd2, buff, 16); 
-        if(buff[0] == 1 | buff[0] == 2) {
-            size_b = 6;
-        }
-        else if (buff[0] == 0)
-        {
-            size_b = 9;
-        }
-        ControlPacket pkt = decode_packet(buff, size_b);
-        process_input(pkt, Xdisp, Xrwin);
-
-        for(int i=0; i < size_b; i++){
-            printf("%hhx", *(buff+i));
-        }
-        printf("\n");
-        memset(buff, 0,MAX); 
-        n = 0; 
-    }
-} 
-
-/*  Create an RDMA capable server socket.
-    On success, returns the socket file descriptor.
-    On failure, returns -1.
-
-    Notes
-    - The caller is responsible for accepting clients after the socket has been created.
-    - rsocket file descriptors cannot be mixed with standard file descriptors.
-int create_rdma_socket(struct sockaddr_in params, bool async) {
-   
-    int sockfd, connfd;
+void *control(void *void_args)
+{
+    ControlArgs *args = (ControlArgs *) void_args;
+    struct ibv_wc *rcv_wc;
+    struct ibv_mr *rcv_mr;
     int ret;
-
-    sockfd = rsocket(params.sin_family, SOCK_STREAM, 0);
-    
-    if (async)
+     
+    // Register receive buffer memory region for signalling data
+    rcv_mr = rdma_reg_msgs(args->connid, args->rcv_buf, args->rcv_bufsize);
+    if (!rcv_mr)
     {
-        ret = rfcntl(sockfd, F_SETFL, O_NONBLOCK);
+        fprintf(stderr, "Could not register memory region.\n");
     }
-    
-    if (sockfd == -1)
+
+    // Wait for client to send a request
+    ret = rdma_post_recv(args->connid, NULL, args->rcv_buf, args->rcv_bufsize, rcv_mr);
+    if (ret)
     {
-        fprintf(stderr, "RDMA socket could not be created.\n");
-        return -1;
+        fprintf(stderr, "Could not post the request to the send queue.\n");
     }
-    else
+
+    // Poll for RDMA receive completion
+    while ((ret = rdma_get_recv_comp(args->connid, &rcv_wc)) == 0)
     {
-        printf("Created RDMA socket.\n");
+        usleep(args->poll_usec);
     }
-
-    if ((rbind(sockfd, (SA*)&params, sizeof(params))) != 0)
+    if (ret < 0)
     {
-        fprintf(stderr, "Could not bind to %s:%d\n",
-            inet_ntoa(params.sin_addr), ntohs(params.sin_port));
-        return -1;
+        fprintf(stderr, "Error receiving data from the client.\n");
     }
-    else
-    {
-        printf("Bound RDMA socket.\n");
-    }
-
-    if ((rlisten(sockfd, 10)) != 0)
-    {
-        fprintf(stderr, "Failed to listen on %s:%d\n",
-            inet_ntoa(params.sin_addr), ntohs(params.sin_port));
-        return -1;
-    }
-    else
-    {
-        printf("Listening on %s:%d\n",
-            inet_ntoa(params.sin_addr), ntohs(params.sin_port));
-    }
-
-    return connfd;
-}
-*/
-
-void* run_client(void* args)
-{
-    display_args dsps = *(display_args *) args;
-    XEvent xevent;
-    int running = true;
-    int initialized = true;
-    int dstwidth = dsps.dst->ximage->width;
-    int dstheight = dsps.dst->ximage->height;
-    int fd = ConnectionNumber(dsps.dsp);
-
-    while(running)
-    {
-        printf("...\n");
-        if(initialized)
-        {
-            printf("getting root...\n");
-            getrootwindow(dsps.dsp, dsps.src, dsps.screen_number, dsps.width);
-            printf("getting frame...\n");
-            if(!get_frame(dsps.src, dsps.dst))
-            {
-                printf("false");
-                return false;
-            }
-            int size = (dsps.dst->ximage->height)*(dsps.dst->ximage->width)*((dsps.dst->ximage->bits_per_pixel)/8);
-            printf("writing...\n");
-            rwrite(connfd,dsps.dst->ximage->data,size);
-            printf("waiting for vsync\n");
-            XSync(dsps.dsp, False);
-        }
-    }
-}
-
-/*  Request the client to create a memory region for the
-    server to push its data.
-int setup_client_resources(int connfd)
-{
-    printf("Read %lu bytes\n", read_bytes);
-    printf("Message type -> %d\n", hdr->msg_type);
-    printf("Message length -> %d\n", hdr->length);
-
-    // Receive client's memory buffer data
-    if (hdr->msg_type == T_MSG_BUFFER_DATA)
-    {
-        read_bytes = rread(connfd, mrbuf,sizeof(T_BufferData));
-        printf("Read %lu bytes\n", read_bytes);
-        printf("Client buffer size %ld bytes, at location %lu\n", mrdata->bufsize, mrdata->offset);
-    }
-
-    hdr->length = 0;
-    hdr->msg_id = 9999;
-    hdr->msg_type = T_MSG_INVALID;
-    hdr->num_msgs = 0;
-
-    rwrite(connfd, hdr, sizeof(T_MsgHeader));
-
-    read_bytes = 0;
-    while (!read_bytes) {
-        read_bytes = riowrite(connfd, frame1_msg, strlen(frame1_msg), mrdata->offset, MSG_DONTWAIT | SOCK_NONBLOCK);
-        if (read_bytes > 0) {
-                printf("YAY");
-            } else {
-                perror("riowrite");
-            }
-        printf("Wrote %lu bytes.\n", read_bytes);
-        usleep(1000000);
-    }
-    
-    usleep(1000000);
-
-    hdr->msg_type = T_MSG_SERVER_XFER_DONE;
-    hdr->length = sizeof(int);
-    hdr->msg_id = rand();
-
-    memcpy(xferbuf, hdr, sizeof(T_MsgHeader));
-    *(int *) (xferbuf + sizeof(T_MsgHeader)) = frame_index;
-
-    rwrite(connfd, xferbuf, sizeof(xferbuf));
-}
-*/
-
-void *run(void *args)
-{
+    printf("Received data!!!!!!!!!!!!\n");
+    printf("Server said: %s", args->rcv_buf);
 
 }
 
@@ -470,7 +297,7 @@ int main(int argc, char* argv[])
     int dstwidth = width;
     int dstheight = height;
 
-    if(!createimage(dsp, &dst, dstwidth, dstheight))
+    if(!createimage(dsp, &dst, dstwidth, dstheight, 32))
     {
         destroyimage(dsp, &src);
         XCloseDisplay(dsp);
@@ -584,7 +411,19 @@ int main(int argc, char* argv[])
             continue;
         }
 
-        pthread_create()
+        pthread_t id1;
+
+        ControlArgs *args_control = malloc(sizeof(ControlArgs));
+        void *recieve_buffer = malloc(256);
+
+        args_control->connid = connid;
+        args_control->dsp = dsp;
+        args_control->ximage = dst.ximage;
+        args_control->rcv_buf = recieve_buffer;
+        args_control->rcv_bufsize = 256;
+        args_control->poll_usec = 1000;
+
+        pthread_create(&id1, NULL, control, (void *) args_control);
 
         // Create a new thread to accept the client connection.
 
