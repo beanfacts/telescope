@@ -74,7 +74,7 @@ int createimage(Display *dsp, struct shmimage *image, int width, int height, int
                         dsp,
                         XDefaultVisual(dsp, XDefaultScreen(dsp)),
                         DefaultDepth(dsp, XDefaultScreen(dsp)),
-                        XYPixmap,
+                        ZPixmap,
                         0,
                         &image->shminfo,
                         0,

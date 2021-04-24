@@ -1,6 +1,9 @@
 #include "rdma_common.h"
 #include <sys/time.h>
 
+// no longer needed - using pure RDMACM
+
+/*
 int full_xfer(int mode, int connfd, void *data, int len, int min_xfer_threshold, float timeout, int usleep_duration)
 {
     ssize_t total_bytes = 0;
@@ -147,3 +150,4 @@ int prepare_image(int connfd, int dpy_index, int chroma)
         return NULL;
 
 }
+*/

@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
 
 // Networking + RDMA stuff
 #include <netinet/tcp.h>
@@ -370,6 +371,9 @@ int main(int argc, char *argv[])
     int send_flags;
     struct ibv_mr *send_mr = rdma_reg_msgs(connid, hello, 256);
     struct ibv_wc wc;
+
+    int speed_test = 0;
+    gettimeofday
 
     while(1)
     {

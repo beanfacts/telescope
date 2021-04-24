@@ -4,19 +4,21 @@
 
 /* Message type definitions */
 
-#define T_MSG_INVALID           0x00
-#define T_MSG_KEEP_ALIVE        0x02
+#define T_MSG_INVALID           0x00        // Invalid message, can be used to signal that an received message was invalid
+#define T_MSG_KEEP_ALIVE        0x02        // Keep the connection alive (not used)
 
-#define T_REQ_SCREEN_DATA       0x10
-#define T_REQ_SERVER_PREPARE    0x11
-#define T_REQ_BUFFER_WRITE      0x12
-#define T_REQ_CLIENT_BUF_DATA   0x13
+#define T_REQ_SCREEN_DATA       0x10        // Request the screen data, such as resolution and # of screens, from the server.
+#define T_REQ_SERVER_PREPARE    0x11        // Request the server prepare resources needed to send an image to the client.
+#define T_REQ_BUFFER_WRITE      0x12        // Request the server write the screen data into the client's buffer.
+#define T_REQ_CLIENT_BUF_DATA   0x13        // Request the buffer data of the client, such as the RDMA rkey.
 
-#define T_META_SCREEN_DATA      0x20
-#define T_META_BUFFER_DATA      0x21
+#define T_META_SCREEN_DATA      0x20        // Server response to a client request for server screen data
+#define T_META_BUFFER_DATA      0x21        // Client response to a server request for client buffer data
 
-#define T_NOTIFY_XFER_DONE      0x30
-#define T_NOTIFY_XFER_FAIL      0x31
+#define T_NOTIFY_XFER_DONE      0x30        // Server notification to client that transfer of data is done
+#define T_NOTIFY_XFER_FAIL      0x31        // Server notification to client that transfer of data has failed
+
+#define T_INLINE_DATA_HID       0x40        // Inline data containing mouse and keyboard information
 
 /* Chroma subsampling types */
 
