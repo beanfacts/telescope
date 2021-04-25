@@ -575,14 +575,14 @@ int main(int argc, char *argv[])
     struct ibv_mr *image_mr;
     struct ibv_wc wc;
 
-    image_mr = ibv_reg_mr(connid->pd, (void *) src.shminfo.shmaddr, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    image_mr = ibv_reg_mr(connid->pd, buffer, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!image_mr)
     {
         fprintf(stderr, "Error registering memory region: %s", strerror(errno));
         return 1;
     }
 
-    screen_config->buffer = src.shminfo.shmaddr;
+    screen_config->buffer = buffer;
 
     T_InlineBuff *mem_msg = (T_InlineBuff *) buffer;
     mem_msg->data_type = T_INLINE_DATA_CLI_MR;

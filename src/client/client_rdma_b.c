@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include <sys/time.h>
 
 // Networking + RDMA stuff
 #include <netinet/tcp.h>
@@ -41,13 +40,12 @@
 
 pthread_mutex_t lock;
 #define INLINE_BUFSIZE 32
-#define TOTAL_WR 3
+#define TOTAL_WR 100
 #define TOTAL_SGE 1
 
 #define __T_DEBUG__
 
 static struct rdma_cm_id *connid;
-static bool use_tcp = true;
 
 typedef struct {
     struct rdma_cm_id   *connid;
@@ -65,7 +63,6 @@ typedef struct {
     Window              x11_window;
     Visual              *visual;
     GC                  gc;
-    int                 tcp_server_fd;
 } screen_param;
 
 struct shmimage
@@ -415,16 +412,9 @@ void *func(void *void_args)
     fprintf(stderr, "\n");
     int times = 0;
 
-    struct timeval t0, t1;
-
     while (1)
     {
-
-        /*
-        #ifdef __T_DEBUG__
-        printf("Posting send request...\n");
-        #endif
-
+        
         // Send the buffer write request
         ret = rdma_post_send(args->connid, NULL, send_buff, INLINE_BUFSIZE, send_mr, 0);
         if (ret)
@@ -451,44 +441,33 @@ void *func(void *void_args)
         #ifdef __T_DEBUG__
         printf("Got send completion ...\n");
         #endif
-        */
+
+        usleep(1000);
 
         // Wait for the server to send a confirmation back that the data has
         // been sent successfully.
 
-        if (use_tcp)
+        ret = rdma_post_recv(args->connid, NULL, recv_buff, INLINE_BUFSIZE, recv_mr);
+        if (ret)
         {
-            ret = read(args->tcp_server_fd, recv_buff, INLINE_BUFSIZE);
-            if (ret < 0)
-            {
-                //fprintf(stderr, "Could not read any data ... \n");
-                continue;
-            }
+            fprintf(stderr, "Error occurred while posting receive request: %s\n", strerror(errno));
         }
-        else
+
+        #ifdef __T_DEBUG__
+        printf("Posted receive request ...\n");
+        #endif
+
+        while ((ret = rdma_get_recv_comp(connid, &wc)) == 0)
         {
-            ret = rdma_post_recv(args->connid, NULL, recv_buff, INLINE_BUFSIZE, recv_mr);
-            if (ret)
-            {
-                fprintf(stderr, "Error occurred while posting receive request: %s\n", strerror(errno));
-            }
-
-            #ifdef __T_DEBUG__
-            printf("Posted receive request ...\n");
-            #endif
-
-            while ((ret = rdma_get_recv_comp(connid, &wc)) == 0)
-            {
-                printf("Waiting for placement ... \n");
-            }
-
-            if (wc.status)
-            {
-                fprintf(stderr, "Fatal error @ #2: %d\n", wc.status);
-                return NULL;
-            }
+            printf("Waiting for placement ... \n");
         }
-        
+
+        if (wc.status)
+        {
+            fprintf(stderr, "Fatal error @ #2: %d\n", wc.status);
+            return NULL;
+        }
+
         // Now that the buffer is in memory we can copy it into X11
 
         #ifdef __T_DEBUG__
@@ -761,44 +740,6 @@ int main(int argc, char *argv[])
         printf("Sending post send data...\n");
     }
 
-    bool use_tcp = true;
-    int connfd = -1;
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-
-    if (use_tcp)
-    {
-
-        connfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (connfd < 0)
-        {
-            fprintf(stderr, "Failed to create the TCP socket!\n");
-            return 1;
-        }
-        printf("Created TCP event notification socket.\n");
-
-        int flag = 1;
-        ret = setsockopt(connfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
-        if (ret < 0)
-        {
-            fprintf(stderr, "Cannot set socket options.\n");
-            return 1;
-        }
-
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_addr.s_addr = inet_addr(argv[1]);
-        server_addr.sin_port = htons(9999);
-
-        ret = connect(connfd, (struct sockaddr *) &server_addr, sizeof(server_addr));
-        if (ret != 0)
-        {
-            fprintf(stderr, "Could not connect to the server.\n");
-            return 1;
-        }
-
-    }
-
-    screen_config->tcp_server_fd = connfd;
     //conn_config->connid = connid;
 
     //th1 = pthread_create(&thread1, NULL, capture_mouse_keyboard, (void *) mouse_config);
