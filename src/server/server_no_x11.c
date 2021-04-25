@@ -30,7 +30,7 @@
 #include <fcntl.h>
 
 #define __T_DEBUG__
-#define INLINE_BUFSIZE 28
+#define INLINE_BUFSIZE 32
 #define TOTAL_WR 1
 #define TOTAL_SGE 1
 static struct rdma_cm_id *sockid, *connid;
@@ -66,7 +66,7 @@ void *control(void *void_args)
     }
      
     // Register receive buffer memory region for signalling data
-    rcv_mr = rdma_reg_msgs(args->connid, args->rcv_buf, INLINE_BUFSIZE;
+    rcv_mr = rdma_reg_msgs(args->connid, args->rcv_buf, INLINE_BUFSIZE);
     if (!rcv_mr)
     {
         fprintf(stderr, "Could not register memory region.\n");
@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
     // init_attr.cap.max_recv_wr = TOTAL_WR;
     // init_attr.cap.max_recv_sge = TOTAL_SGE;
     // init_attr.cap.max_inline_data = INLINE_BUFSIZE;
-    //init_attr.qp_type = IBV_QPT_RC;
+    // init_attr.qp_type = IBV_QPT_RC;
 
     init_attr.cap.max_send_wr = init_attr.cap.max_recv_wr = 1;
 	init_attr.cap.max_send_sge = init_attr.cap.max_recv_sge = 1;
@@ -166,6 +166,7 @@ int main(int argc, char* argv[])
     printf("%d",sockid);
     printf( "%d",&connid);
     //ret = rdma_get_request(sockid, &connid);
+
     while (1)
     {
         ret = rdma_get_request(sockid, &connid);
@@ -191,21 +192,6 @@ int main(int argc, char* argv[])
             continue;
         }
         printf("Received QP information\n");
-        
-        // Disconnect client if there isn't enough inline buffer space or SGEs.
-        if (!(conn_attr.cap.max_inline_data >= INLINE_BUFSIZE
-            && conn_attr.qp_type == IBV_QPT_RC))
-        {
-            fprintf(stderr, 
-                "Connection does not support features required by Telescope:\n"
-                "Max inline data: %d\t(req. %d)\n"
-                "QP Type:         %d\t(req. %d - IBV_QPT_RC)\n",
-                conn_attr.cap.max_inline_data, INLINE_BUFSIZE,
-                conn_attr.qp_type, IBV_QPT_RC
-            );
-            rdma_destroy_ep(connid);
-            continue;
-        }
         printf("Preparing to accept client\n");
 
         // Accept the connection if the checks pass
@@ -218,22 +204,72 @@ int main(int argc, char* argv[])
 
         printf("Accepted client. Starting thread\n");
 
-        pthread_t id1;
+        struct ibv_wc rcv_wc;
+        int image_bytes = 1000;
+        
+        struct ibv_mr *image_mr;
+        struct ibv_mr *inline_mr;
 
-        ControlArgs *args_control = malloc(sizeof(ControlArgs));
-        void *recieve_buffer = malloc(INLINE_BUFSIZE);
+        void *buffer = calloc(image_bytes, 1);
+        memset(buffer, 1, image_bytes);
+        void *inbuf = calloc(INLINE_BUFSIZE, 1);
+        
+        image_mr = ibv_reg_mr(connid->pd, (void *) buffer, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+        if (!image_mr)
+        {
+            fprintf(stderr, "Error registering memory region: %s", strerror(errno));
+        }
 
-        args_control->connid = connid;
-        args_control->dsp = NULL;
-        args_control->ximage = NULL;
-        args_control->rcv_buf = recieve_buffer;
-        args_control->rcv_bufsize = INLINE_BUFSIZE;
-        args_control->poll_usec = 1000;
+        inline_mr = rdma_reg_msgs(connid, inbuf, INLINE_BUFSIZE);
+        if (!inline_mr)
+        {
+            fprintf(stderr, "Error registering inline memory region: %s", strerror(errno));
+        }
 
-        // Create a new thread to accept the client connection.
-        pthread_create(&id1, NULL, control, (void *) args_control);
+        ret = rdma_post_recv(connid, NULL, inbuf, INLINE_BUFSIZE, inline_mr);
+        if (ret)
+        {
+            fprintf(stderr, "Could not post the receive request to the queue: %s\n", strerror(errno));
+        }
 
-        // todo: add and remove the threads from queue
+        while ((ret = rdma_get_recv_comp(connid, &rcv_wc)) == 0)
+        {
+            printf("Waiting for incoming data...\n");
+        }
+
+        
+        T_InlineBuff *mem_msg = (T_InlineBuff *) inbuf;
+        
+        printf( "------- Client information -------\n"
+        "(Type: %20lu) (Addr: %20lu)\n"
+        "(Size: %20lu) (Rkey: %20lu)\n"
+        "(Bufs: %20lu)\n" 
+        "----------------------------------\n",
+        (uint64_t) mem_msg->data_type, (uint64_t) mem_msg->addr, (uint64_t) mem_msg->size,
+        (uint64_t) mem_msg->rkey, (uint64_t) mem_msg->numbufs);
+
+        for(int i=0; i < sizeof(T_InlineBuff) ; i++)
+        {
+            printf("%hhx", *((char *) buffer + i));
+        }
+        printf("\n");
+
+        ret = rdma_post_write(connid, NULL, buffer, image_bytes, image_mr, 0, (uint64_t) mem_msg->addr, mem_msg->rkey);
+        if (ret)
+        {
+            fprintf(stderr, "Error: %s\n", strerror(errno));
+            continue;
+        }
+        while ((ret = rdma_get_send_comp(connid, &rcv_wc)) == 0)
+        {
+            printf("what\n");
+        }
+        if (rcv_wc.status)
+        {
+            fprintf(stderr, "Error RDMA: %d\n", rcv_wc.status);
+            continue;
+        }
+        printf("Transfer complete!!!\n");
 
     }
 }

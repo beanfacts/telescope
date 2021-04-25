@@ -189,12 +189,9 @@ void executeMovement(Task *task){
 
         // int sockfd = task->sockfd;
         // xcb_connection_t *connection = task->connection;
-
      
         // xcb_screen_t *screen = task->screen;
 
-
-        
         // xcb_window_t window    = task->window;
 
         // uint32_t     mask      = task->mask;

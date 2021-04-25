@@ -13,9 +13,9 @@
 
 struct shmimage
 {
-    XShmSegmentInfo shminfo ;
-    XImage * ximage ;
-    unsigned int * data ;
+    XShmSegmentInfo shminfo;
+    XImage *ximage;
+    //unsigned int *data;
 };
 
 void initimage(struct shmimage* image);
