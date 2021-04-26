@@ -35,12 +35,10 @@
 
 #define __T_DEBUG__
 #define INLINE_BUFSIZE 32
-#define TOTAL_WR 3
+#define TOTAL_WR 100
 #define TOTAL_SGE 1
+sem_t mutex;
 static struct rdma_cm_id *sockid, *connid;
-
-// Do you want to use TCP or RDMA event notification mechanisms?
-static bool use_tcp = true;
 
 
 typedef struct {
@@ -60,8 +58,6 @@ typedef struct
     void                *rcv_buf;       // Receive buffer
     int                 rcv_bufsize;    // Receive buffer size
     int                 poll_usec;      // Polling delay
-    sem_t               *semaphore;     // Semaphore to sync RDMA
-    int                 tcp_fd;         // TCP event notification FD
 } ControlArgs;
 
 
@@ -73,8 +69,6 @@ typedef struct
     struct shmimage     *src;           // X11 shared memory segment information
     int                 screen_number;  // X11 screen index
     int                 width;          // Screen width
-    sem_t               *semaphore;     // Semaphore to sync RDMA
-    int                 tcp_fd;         // TCP event notification FD
 } display_args;
 
 
@@ -149,7 +143,6 @@ void *control(void *void_args)
     if(!(args->rcv_buf))
     {
         args->rcv_buf = calloc(INLINE_BUFSIZE, 1);
-        args->rcv_bufsize = INLINE_BUFSIZE;
     }
 
     // Register receive buffer memory region for signalling data
@@ -174,23 +167,6 @@ void *control(void *void_args)
         fprintf(stderr, "CQ resize failed: %s\n", strerror(errno));
     }
     
-    int semvalue;
-    
-    while (1)
-    {
-        sem_getvalue(args->semaphore, &semvalue);
-        if (semvalue == 0)
-        {
-            sem_post(args->semaphore);
-        }
-        else
-        {
-            printf("Client asked for receive while one is pending\n");
-        }
-        sleep(16667);
-    }
-
-    /*
     while (1)
     {
 
@@ -221,10 +197,11 @@ void *control(void *void_args)
         }
 
         // Determine what to do with the incoming data
-        printf("Received incoming data.\n");
-        fprintf(stderr, "Message type: %d\n", *(int *) args->rcv_buf);
+        //printf("Received incoming data.\n");
+        //printf("Message type: %d\n", *(int *) args->rcv_buf);
 
         rcv_type = *(int *) args->rcv_buf;
+
         switch (rcv_type)
         {
             case T_MSG_KEEP_ALIVE:
@@ -247,26 +224,33 @@ void *control(void *void_args)
             }
             case T_REQ_BUFFER_WRITE:
             {
-                sem_getvalue(args->semaphore, &semvalue);
-                if (semvalue == 0)
-                {
-                    sem_post(args->semaphore);
-                }
-                else
-                {
-                    printf("Client asked for receive while one is pending\n");
-                }
+                //write_buffer();       // bright: unlock here
+                sem_post(&mutex);
                 break;
             }
             default:
             {
-                //fprintf(stderr, "Invalid message type: %d\n", rcv_type);
+                fprintf(stderr, "Invalid message\n");
             }
         }
     }
-    */
 }
 
+// Window createwindow(Display *dsp, int width, int height)
+// {
+//     unsigned long mask = CWBackingStore;
+//     XSetWindowAttributes attributes;
+//     attributes.backing_store = NotUseful;
+//     mask |= CWBackingStore;
+//     Window window = XCreateWindow(dsp, DefaultRootWindow(dsp),
+//                                    0, 0, width, height, 0,
+//                                    DefaultDepth(dsp, XDefaultScreen(dsp)),
+//                                    InputOutput, CopyFromParent, mask, &attributes);
+//     XStoreName(dsp, window, "server");
+//     XSelectInput(dsp, window, StructureNotifyMask);
+//     XMapWindow(dsp, window);
+//     return window;
+// }
 
 void *run(void *args)
 {
@@ -284,21 +268,12 @@ void *run(void *args)
 
     int image_bytes = width * height * (bpp / 8);
     unsigned int *buffer = calloc(1, image_bytes);
-    void *confirm_buffer = calloc(1, INLINE_BUFSIZE);
-    int random = 0;
+    memset(buffer, 1, image_bytes);
     
-    struct ibv_mr *image_mr, *confirm_mr;
-    struct ibv_wc wc; 
+    struct ibv_mr *image_mr;
+    struct ibv_wc wc;
 
-    confirm_mr = rdma_reg_msgs(dsps.connid, confirm_buffer, INLINE_BUFSIZE);
-    if (!confirm_mr)
-    {
-        fprintf(stderr, "Error registering memory region: %s", strerror(errno));
-    }
-
-    printf("SHM section: %lu, X11 section: %lu\n", dsps.src->shminfo.shmaddr, dsps.src->ximage->data);
-    
-    image_mr = ibv_reg_mr(dsps.connid->pd, (void *) dsps.src->ximage->data, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    image_mr = ibv_reg_mr(dsps.connid->pd, (void *) buffer, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!image_mr)
     {
         fprintf(stderr, "Error registering memory region: %s", strerror(errno));
@@ -307,86 +282,34 @@ void *run(void *args)
     while (1)
     {
         // bright: wait for unlock
-        sem_wait(dsps.semaphore);
+        sem_wait(&mutex);
         printf("Getting image...\n");
-        // memset(dsps.src->ximage->data, 1, image_bytes);
-        // for(int i=0; i < 50; i++)
-        // {
-        //     printf("%hhx", *((char *) dsps.src->ximage->data + i));
-        // }
-        // printf("\n");
         getrootwindow(dsps.dsp, dsps.src, 0, 0);
-        XSync(dsps.dsp, False);
         printf("Writing data...\n");
-
-        for(int i=0; i < 50; i++)
-        {
-            printf("%hhx", *((char *) dsps.src->ximage->data + i));
-        }
-        printf("\n");
-
-        #ifdef __T_DEBUG__
-        printf("Posting write request...\n");
-        #endif
-
-        *(int *) buffer = random++;
-        // memset(dsps.src->ximage->data, 1, image_bytes);
-        ret = rdma_post_write(dsps.connid, NULL, (void *) dsps.src->ximage->data, image_bytes, image_mr, IBV_SEND_FENCE, 
+        ret = rdma_post_write(dsps.connid, NULL, buffer, image_bytes, image_mr, 0, 
             dsps.remote_mr->addr, dsps.remote_mr->rkey);
         if (ret)
         {
             fprintf(stderr, "Could not perform a post write: %s", strerror(errno));
             goto unlock;
         }
+        XSync(dsps.dsp, False);
         while ((ret = rdma_get_send_comp(dsps.connid, &wc)) == 0)
         {
             printf("Waiting for client to confirm ...\n");
         }
         if (wc.status)
         {
-            fprintf(stderr, "WC error (%d) on write #1\n", wc.status);
             goto unlock;
+            fprintf(stderr, "WC error (%d) on write\n", wc.status);
         }
         else
         {
-            printf("Wirote data\n");
+            printf("Wirote data");
         }
-
-        #ifdef __T_DEBUG__
-        printf("Posting send request...\n");
-        #endif
-
-        if (use_tcp)
-        {
-            write(dsps.tcp_fd, confirm_buffer, INLINE_BUFSIZE);
-            if (ret < 0)
-            {
-                fprintf(stderr, "Could not write any data ... %s\n", strerror(errno));
-            }
-            goto unlock;
-        }
-        else
-        {
-            ret = rdma_post_send(dsps.connid, NULL, confirm_buffer, INLINE_BUFSIZE, confirm_mr, IBV_SEND_INLINE);
-            
-            while ((ret = rdma_get_send_comp(dsps.connid, &wc)) == 0)
-            {
-                printf("Waiting for client to confirm my confirmation ...\n");
-            }
-
-            if (wc.status)
-            {
-                fprintf(stderr, "WC error (%d) on write #2\n", wc.status);
-                goto unlock;
-            }
-            #ifdef __T_DEBUG__
-            printf("Posting send complete...\n");
-            #endif
-
-            goto unlock;
-        }
+        goto unlock;
         unlock:
-            sem_post(dsps.semaphore);
+            sem_post(&mutex);
         // bright: lock
     }
 
@@ -396,9 +319,9 @@ int main(int argc, char* argv[])
 {
 
     int ret = XInitThreads();
+    sem_init(&mutex,0,1);
     if (!ret){
         fprintf(stderr, "X11 threading error: %d\n", ret);
-        return 1;
     }
     else
     {
@@ -414,6 +337,7 @@ int main(int argc, char* argv[])
     }
 
     Window dsp_root = XDefaultRootWindow(dsp);
+
     int screen = XDefaultScreen(dsp);
 
     // Check the X server supports shared memory extensions
@@ -526,64 +450,17 @@ int main(int argc, char* argv[])
     }
     printf("Listening on RDMA channel\n");
     printf("SockID: %d\n",sockid);
-
-    int sockfd, connfd, len; 
-    struct sockaddr_in servaddr;
-
-    if (use_tcp)
-    {
-    
-        // Create socket and set up addresses
-
-        sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-        if (sockfd == -1)
-        { 
-            printf("Could not create the socket.\n");
-            return 1;
-        } 
-
-        memset(&servaddr, 0, sizeof(servaddr)); 
-    
-        int port = (short) atoi(argv[2]);
-
-        servaddr.sin_family = AF_INET; 
-        servaddr.sin_addr.s_addr = inet_addr(argv[1]); 
-        servaddr.sin_port = htons(9999);
-    
-        // Bind address
-
-        if ((bind(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr))) != 0)
-        { 
-            printf("Cannot bind to socket.\n"); 
-            return 1;
-        }
-        
-        if ((listen(sockfd, 5)) != 0) { 
-            printf("Cannot listen on socket.\n"); 
-            return 1;
-        }
-        
-        fprintf(stdout, 
-            "Client info: %s:%d\n", 
-            inet_ntoa(servaddr.sin_addr), ntohs(servaddr.sin_port));
-    }
-
-    int sa_len = sizeof(struct sockaddr);
+    printf("ConnID: %d\n",&connid);
 
     while (1)
-    {   
-        struct sockaddr_in *client_id = calloc(1, sizeof(struct sockaddr_in));
-        struct rdma_cm_id *connid = calloc(1, sizeof(struct rdma_cm_id));
-        int tcp_client_fd;
-        
-        printf("ConnID: %d %d\n", &connid, connid);
-
-        ret = rdma_get_request(sockid, &connid); 
+    {
+        ret = rdma_get_request(sockid, &connid);
         if (ret)
         {
             fprintf(stderr, "Failed to read connection request.\n");
             continue;
         }
+        printf("Got a connection request.\n");
 
         // Determine whether the connection supports the features required
         // for Telescope
@@ -616,6 +493,7 @@ int main(int argc, char* argv[])
         }
         printf("Preparing to accept client\n");
 
+        
         // Accept the connection if the checks pass
         ret = rdma_accept(connid, NULL);
         if (ret)
@@ -639,12 +517,15 @@ int main(int argc, char* argv[])
         if (ret)
         {
             fprintf(stderr, "Could not post the receive request to the queue: %s\n", strerror(errno));
-        }
+        }  
 
         while ((ret = rdma_get_recv_comp(connid, &rcv_wc)) == 0)
         {
             printf("Waiting for incoming data...\n");
         }
+        
+        uint32_t dtype, rkey, nbufs;
+        uint64_t addr, size;
         
         T_InlineBuff *mem_msg = (T_InlineBuff *) recieve_buffer;
 
@@ -668,61 +549,44 @@ int main(int argc, char* argv[])
         (uint64_t) mem_msg->data_type, (uint64_t) mem_msg->addr, (uint64_t) mem_msg->size,
         (uint64_t) mem_msg->rkey, (uint64_t) mem_msg->numbufs);
 
-        if (use_tcp)
-        {
-            printf("Got a connection request. Waiting for TCP channel...\n");
-            tcp_client_fd = accept(sockfd, (struct sockaddr *) client_id, &sa_len); 
-            if (tcp_client_fd < 0)
-            { 
-                printf("Server could not accept the client.\n");
-                continue;
-            }
-        }
-        else
-        {
-            tcp_client_fd = -1;
-            free(client_id);
-        }
-
         pthread_t id1;
         pthread_t id2;
         
-        // Create a new semaphore to be shared between the calling threads
-        // of the process. I
-        sem_t *semaphore = malloc(sizeof(sem_t));
-        sem_init(semaphore, 0, 0);
-
         ControlArgs *args_control = malloc(sizeof(ControlArgs));
-        
         args_control->connid = connid;
         args_control->dsp = dsp;
         args_control->ximage = NULL;
         args_control->win = dsp_root;
-        args_control->rcv_buf = NULL;
+        args_control->rcv_buf = recieve_buffer;
         args_control->rcv_bufsize = INLINE_BUFSIZE;
         args_control->poll_usec = 1000;
-        args_control->semaphore = semaphore;
-        args_control->tcp_fd = tcp_client_fd;
         
         display_args *args_display = malloc(sizeof(display_args));
-        
         args_display->connid = connid;
         args_display->dsp = dsp;
         args_display->screen_number = 0;
         args_display->width = 1920;
         args_display->src = &src;
-        args_display->semaphore = semaphore;
-        args_display->tcp_fd = tcp_client_fd;
-
         args_display->remote_mr = malloc(sizeof(RemoteMR));
-        args_display->remote_mr->addr = (uint64_t) mem_msg->addr;
-        args_display->remote_mr->nbufs = mem_msg->numbufs;
-        args_display->remote_mr->rkey = mem_msg->rkey;
-        args_display->remote_mr->size = mem_msg->size;
+        args_display->remote_mr->addr = addr;
+        args_display->remote_mr->nbufs = nbufs;
+        args_display->remote_mr->rkey = rkey;
+        args_display->remote_mr->size = size;
+        // display_args argument_for_display = {   .dsp = dsp, 
+        //                                     .src = &src, 
+        //                                     .screen_number=screen_no, 
+        //                                     .width = width,
+        //                                     .connid
+        // };
 
+        // Create a new thread to accept the client connection.
+        // bright: lock here
+        sem_wait(&mutex);
         pthread_create(&id1, NULL, control, (void *) args_control);
-        pthread_create(&id2, NULL, run, (void *) args_display);
-        
-        free(recieve_buffer);
+
+        pthread_create(&id2,NULL, &run, (void *) args_display);
+
+        sem_destroy(&mutex);
+        // todo: add and remove the threads from queue
     }
 }

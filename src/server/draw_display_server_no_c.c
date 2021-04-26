@@ -26,7 +26,6 @@
 #include <netinet/in.h> 
 
 #include "screencap.h"
-#include "screencap.c"
 #include "../common/rdma_common.h"
 
 #include <fcntl.h>
@@ -196,7 +195,6 @@ void *control(void *void_args)
     printf("Server said: %s", (char *) args->rcv_buf);
 
 }
-
 
 int main(int argc, char* argv[])
 {

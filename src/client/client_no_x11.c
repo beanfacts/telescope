@@ -26,7 +26,7 @@
 #define HEIGHT 1080
 
 pthread_mutex_t lock;
-#define INLINE_BUFSIZE 24
+#define INLINE_BUFSIZE 32
 #define TOTAL_WR 1
 #define TOTAL_SGE 1
 
@@ -69,24 +69,10 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Could not create connection.\n");
     }
-    if (!(init_attr.cap.max_inline_data >= INLINE_BUFSIZE
-        && init_attr.qp_type == IBV_QPT_RC))
-    {
-        fprintf(stderr, 
-                "Connection does not support features required by Telescope:\n"
-                "Max inline data: %d\t(req. %d)\n"
-                "QP Type:         %d\t(req. %d - IBV_QPT_RC)\n",
-                init_attr.cap.max_inline_data, INLINE_BUFSIZE, 
-                init_attr.qp_type, IBV_QPT_RC
-        );
-        rdma_destroy_ep(connid);
-        return 1;
-    }
 
     void *hello = calloc(INLINE_BUFSIZE, 1);
     int send_flags;
     struct ibv_mr *send_mr = rdma_reg_msgs(connid, hello, INLINE_BUFSIZE);
-    struct ibv_wc wc;
 
     ret = rdma_connect(connid, NULL);
     *(int *) hello = T_MSG_KEEP_ALIVE;
@@ -100,49 +86,63 @@ int main(int argc, char *argv[])
 
     printf("\"Limit\",\"Speed\"\n");
 
-    while(1)
+    struct ibv_mr *image_mr;
+    struct ibv_wc wc;
+
+    int image_bytes = 1000;
+    void *buffer = calloc(image_bytes, 1);
+    
+    image_mr = ibv_reg_mr(connid->pd, (void *) buffer, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    if (!image_mr)
     {
-        usleep(sdur);
-        rdma_post_send(connid, NULL, hello, INLINE_BUFSIZE, send_mr, IBV_SEND_INLINE);
-        while ((ret = rdma_get_send_comp(connid, &wc)) == 0);
-        if (ret < 0) {
-            fprintf(stderr, "Error sending data\n");
-        }
-        if (!ret)
-        {
-            continue;
-        }
-        speed_test++;
-        gettimeofday(&t1, NULL);
-        if (t1.tv_sec - t0.tv_sec >= 1)
-        {
-            printf("%d,%d\n", speed_test, sdur);
-            speed_test = 0;
-            if (cn++ > n)
-            {
-                if (sdur <= 100)
-                {
-                    sdur -= 1;
-                }
-                else if (sdur <= 1000)         
-                {
-                    sdur -= 10;
-                }                
-                else if (sdur <= 5000)
-                {
-                    sdur -= 100;
-                }
-                else
-                {
-                    sdur -= 200;
-                }
-                cn = 0;
-            }
-            if (sdur < 0)
-            {
-                exit(0);
-            }
-            gettimeofday(&t0, NULL);
-        }
+        fprintf(stderr, "Error registering memory region: %s", strerror(errno));
     }
+
+    T_InlineBuff *mem_msg = (T_InlineBuff *) hello;
+    mem_msg->data_type = T_INLINE_DATA_CLI_MR;
+    mem_msg->addr = image_mr->addr;
+    mem_msg->size = image_bytes;
+    mem_msg->rkey = image_mr->rkey;
+    mem_msg->numbufs = 1;
+
+    for(int i=0; i < sizeof(T_InlineBuff) ; i++)
+    {
+        printf("%hhx", *((char *) hello + i));
+    }
+    printf("\n");
+
+    printf("Before:\n");
+    for(int i = 0; i < 1000; i++)
+    {
+        printf("%hhx", *((char *) buffer + i));
+    }
+    printf("\n");
+    
+    printf( "------- Client information -------\n"
+        "(Type: %20lu) (Addr: %20lu)\n"
+        "(Size: %20lu) (Rkey: %20lu)\n"
+        "(Bufs: %20lu)\n" 
+        "----------------------------------\n",
+        (uint64_t) mem_msg->data_type, (uint64_t) mem_msg->addr, (uint64_t) mem_msg->size,
+        (uint64_t) mem_msg->rkey, (uint64_t) mem_msg->numbufs);
+
+    rdma_post_send(connid, NULL, hello, INLINE_BUFSIZE, send_mr, 0);
+    while ((ret = rdma_get_send_comp(connid, &wc)) == 0)
+    {
+        printf("waiting\n");
+    }
+    if (ret < 0)
+    {
+        fprintf(stderr, "Error sending data\n");
+    }
+    printf("rdma ready\n");
+    sleep(5);
+
+    printf("After:\n");
+    for(int i = 0; i < 1000; i++)
+    {
+        printf("%hhx", *((char *) buffer + i));
+    }
+    printf("\n");
+
 } 

@@ -19,6 +19,7 @@
 #define T_NOTIFY_XFER_FAIL      0x31        // Server notification to client that transfer of data has failed
 
 #define T_INLINE_DATA_HID       0x40        // Inline data containing mouse and keyboard information
+#define T_INLINE_DATA_CLI_MR    0x41        // Inline data containing the client memory information
 
 /* Chroma subsampling types */
 
@@ -44,6 +45,16 @@
 #define clear(x) memset(&x, 0, sizeof(x))                   // Clear fields of an existing variable
 #define new(type, x) type x; memset(&x, 0, sizeof(x))       // Create a new zeroed item (on stack)
 #define heapnew(type, x) type x = calloc(1, sizeof(type))   // Create a new zeroed item (on heap)
+#define println(x) printf(x "\n");
+
+void printb(char *buff, int n)
+{
+    for(int i=0; i < n; i++)
+    {
+        printf("%hhx", *(buff + i));
+    }
+    printf("\n");
+}
 
 /* Message header */
 
@@ -83,6 +94,15 @@ typedef struct {
     int elements;       // Number of available elements
     void *data;         // Pointer to actual data, convert to appropriate type
 } T_List;
+
+/* Inline buffer data */
+typedef struct {
+    uint32_t    data_type;
+    void        *addr;
+    uint64_t    size;
+    uint32_t    rkey;
+    uint32_t    numbufs;
+} T_InlineBuff;
 
 /* Screen metadata */
 

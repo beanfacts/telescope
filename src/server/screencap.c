@@ -56,11 +56,15 @@ int createimage(Display *dsp, struct shmimage *image, int width, int height, int
     }
 
     // Delete the shared memory segment on exit or crash
-    shmctl(image->shminfo.shmid, IPC_RMID, 0);
+    ret = shmctl(image->shminfo.shmid, IPC_RMID, 0);
+    if (ret == -1)
+    {
+        fprintf(stderr, "Error marking the segment for deletion.\n", strerror(errno));
+    }
 
     // If X11 forwarding is used, the attachment may fail since the display
     // isn't using the same memory region
-    image->data = (unsigned int *) image->shminfo.shmaddr;
+    //image->data = (unsigned int *) image->shminfo.shmaddr;
     image->shminfo.readOnly = false;
     
     // Finally, tell X11 to use the shared memory segment
@@ -68,6 +72,7 @@ int createimage(Display *dsp, struct shmimage *image, int width, int height, int
     if (!ret) {
         fprintf(stderr, "Could not attach X display (is this a remote display?)\n");
     }
+
     XSync(dsp, false);
 
     image->ximage = XShmCreateImage(
@@ -87,27 +92,48 @@ int createimage(Display *dsp, struct shmimage *image, int width, int height, int
         return false;
     }
 
-    image->ximage->data = (char *)image->data;
+    image->ximage->data = (char *) image->shminfo.shmaddr;
     image->ximage->width = width;
     image->ximage->height = height;
 
-    XShmAttach(dsp, &image->shminfo);
+    ret = XShmAttach(dsp, &image->shminfo);
+    if (!ret)
+    {
+        fprintf(stderr, "Could not attach SHM segment\n");
+    }
     
     return true;
 }
 
-void getrootwindow(Display * dsp, struct shmimage *image, int screen_no, int screen_width)
+// Capture an image from the root window. This will fail for big endian but i dont care
+void getrootwindow(Display *dsp, struct shmimage *image, int screen_no, int screen_width)
 {
+    int ret;
+    printf("Passed in: %d\n", image->ximage->data);
+    printb(image->ximage->data, 50);
     if (screen_no == 0)
     {
-        XShmGetImage(dsp, XDefaultRootWindow(dsp), image->ximage, 0, 0, AllPlanes);
+        ret = XShmGetImage(dsp, XDefaultRootWindow(dsp), image->ximage, 0, 0, AllPlanes);
+        if (ret)
+        {
+            fprintf(stderr, "X11 Cap Error: %d\n", ret);
+        }
     }
     else
     {
-        XShmGetImage(dsp, XDefaultRootWindow(dsp), image->ximage, screen_width * screen_no, 0, AllPlanes);
+        ret = XShmGetImage(dsp, XDefaultRootWindow(dsp), image->ximage, screen_width * screen_no, 0, AllPlanes);
+        if (ret)
+        {
+            fprintf(stderr, "X11 Cap Error: %d\n", ret);
+        }
     }
+    printf("Got out\n");
+    printb(image->ximage->data, 50);
 }
 
+// If there are multiple screens, this will create a copy that can be sent
+// over RDMA.
+/*
 int get_frame(struct shmimage * src, struct shmimage * dst)
 {
     int sw = src->ximage->width;
@@ -128,3 +154,4 @@ int get_frame(struct shmimage * src, struct shmimage * dst)
     }
     return true;
 }
+*/

@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include <sys/time.h>
 
 // Networking + RDMA stuff
 #include <netinet/tcp.h>
@@ -41,13 +40,12 @@
 
 pthread_mutex_t lock;
 #define INLINE_BUFSIZE 32
-#define TOTAL_WR 3
+#define TOTAL_WR 100
 #define TOTAL_SGE 1
 
 #define __T_DEBUG__
 
 static struct rdma_cm_id *connid;
-static bool use_tcp = true;
 
 typedef struct {
     struct rdma_cm_id   *connid;
@@ -65,7 +63,6 @@ typedef struct {
     Window              x11_window;
     Visual              *visual;
     GC                  gc;
-    int                 tcp_server_fd;
 } screen_param;
 
 struct shmimage
@@ -79,8 +76,7 @@ struct shmimage
 // static void setCursor (xcb_connection_t*, xcb_screen_t*, xcb_window_t, int);
 static void testCookie(xcb_void_cookie_t, xcb_connection_t*, char *); 
 
-static void testCookie (xcb_void_cookie_t cookie, xcb_connection_t *connection, char *errMessage)
-{
+static void testCookie (xcb_void_cookie_t cookie, xcb_connection_t *connection, char *errMessage){
     xcb_generic_error_t *error = xcb_request_check (connection, cookie);
     if (error) {
         fprintf (stderr, "ERROR: %s : %d\n", errMessage , error->error_code);
@@ -89,8 +85,7 @@ static void testCookie (xcb_void_cookie_t cookie, xcb_connection_t *connection, 
     }
 }
 
-void get_center(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *ret_ceny)
-{
+void get_center(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *ret_ceny){
 
     xcb_get_geometry_cookie_t cookie;
     xcb_get_geometry_reply_t *reply;
@@ -105,8 +100,7 @@ void get_center(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *re
 
 int num_tests = 0;
 
-void send_input(struct rdma_cm_id * connid, char *buff, struct ibv_mr *send_mr) 
-{  
+void send_input(struct rdma_cm_id * connid, char *buff, struct ibv_mr *send_mr) {  
     printf("Sending...");
     fflush(stdout);
     struct ibv_wc wc;
@@ -304,84 +298,20 @@ void *capture_mouse_keyboard(void *args) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-void initimage( struct shmimage * image )
+XImage *createimage(Display *display, Visual *visual, int width, int height, char *image)
 {
-    image->ximage = NULL ;
-    image->shminfo.shmaddr = (char *) -1 ;
+    return XCreateImage(display, visual, 24, ZPixmap, 0, image, width, height, 32, 0);
 }
 
-
-void destroyimage( Display * dsp, struct shmimage * image )
-{
-    if( image->ximage )
-    {
-        XShmDetach( dsp, &image->shminfo ) ;
-        XDestroyImage( image->ximage ) ;
-        image->ximage = NULL ;
-    }
-
-    if( image->shminfo.shmaddr != ( char * ) -1 )
-    {
-        shmdt( image->shminfo.shmaddr ) ;
-        image->shminfo.shmaddr = ( char * ) -1 ;
-    }
-}
-
-
-XImage *shm_create_ximage(Display *display, struct shmimage * image, int width, int height )
-{
-    image->shminfo.shmid = shmget( IPC_PRIVATE, width * height * 4, IPC_CREAT | 0600 ) ;
-    if( image->shminfo.shmid == -1 )
-    {
-        perror( "screencap" ) ;
-        return false ;
-    }
-
-    image->shminfo.shmaddr = (char *) shmat( image->shminfo.shmid, 0, 0 ) ;
-    if( image->shminfo.shmaddr == (char *) -1 )
-    {
-        perror( "screencap" ) ;
-        return false ;
-    }
-    image->data = (unsigned int*) image->shminfo.shmaddr ;
-    image->shminfo.readOnly = false ;
-
-    shmctl( image->shminfo.shmid, IPC_RMID, 0 ) ;
-
-    image->ximage = XShmCreateImage( display, XDefaultVisual( display, XDefaultScreen( display ) ),
-                        DefaultDepth( display, XDefaultScreen( display ) ), XYPixmap, 0,
-                        &image->shminfo, 0, 0 ) ;
-    if( !image->ximage )
-    {
-        destroyimage( display, image ) ;
-        printf(": could not allocate the XImage structure\n" ) ;
-        return false ;
-    }
-
-
-    // return XShmCreateImage(display, visual, 24, ZPixmap, 0, image, width, height, 32, 0);
-    // return XCreateImage(display, visual, 24, ZPixmap, 0, image, width, height, 32, 0);
-}
-
-
-XImage *noshm_create_ximage(Display *display, Visual *visual, int width, int height, char *image)
-{
-    return XCreateImage(display, visual, 24,ZPixmap, 0, image, width, height, 32, 0);
-}
-
-
-int noshm_putimage(char *image, Display *display, Visual *visual, Window window, GC gc)
-{    
-    XImage *ximage = noshm_create_ximage(display, visual, WIDTH, HEIGHT, image);
+int putimage(char *image , Display *display, Visual *visual, Window window, GC gc)
+{    XImage *ximage = createimage(display, visual, WIDTH, HEIGHT, image);
     XEvent event;
     bool exit = false;
     int r;
-    // r = XShmPutImage(display, window, gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT, False);
     r = XPutImage(display, window, gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT);
     printf("RES: %i\n", r);
     return 0;
 }
-
 
 void *func(void *void_args) 
 {
@@ -415,16 +345,9 @@ void *func(void *void_args)
     fprintf(stderr, "\n");
     int times = 0;
 
-    struct timeval t0, t1;
-
     while (1)
     {
-
-        /*
-        #ifdef __T_DEBUG__
-        printf("Posting send request...\n");
-        #endif
-
+        
         // Send the buffer write request
         ret = rdma_post_send(args->connid, NULL, send_buff, INLINE_BUFSIZE, send_mr, 0);
         if (ret)
@@ -437,7 +360,6 @@ void *func(void *void_args)
         #endif
 
         // Send the request and wait for the send to complete
-
         while ((ret = rdma_get_send_comp(connid, &wc)) == 0)
         {
             printf("Sending request ... \n");
@@ -451,45 +373,31 @@ void *func(void *void_args)
         #ifdef __T_DEBUG__
         printf("Got send completion ...\n");
         #endif
-        */
+
+        usleep(1000);
 
         // Wait for the server to send a confirmation back that the data has
         // been sent successfully.
-
-        if (use_tcp)
+        ret = rdma_post_recv(args->connid, NULL, recv_buff, INLINE_BUFSIZE, recv_mr);
+        if (ret)
         {
-            ret = read(args->tcp_server_fd, recv_buff, INLINE_BUFSIZE);
-            if (ret < 0)
-            {
-                //fprintf(stderr, "Could not read any data ... \n");
-                continue;
-            }
+            fprintf(stderr, "Error occurred while posting receive request: %s\n", strerror(errno));
         }
-        else
+
+        #ifdef __T_DEBUG__
+        printf("Posted receive request ...\n");
+        #endif
+
+        while ((ret = rdma_get_recv_comp(connid, &wc)) == 0)
         {
-            ret = rdma_post_recv(args->connid, NULL, recv_buff, INLINE_BUFSIZE, recv_mr);
-            if (ret)
-            {
-                fprintf(stderr, "Error occurred while posting receive request: %s\n", strerror(errno));
-            }
-
-            #ifdef __T_DEBUG__
-            printf("Posted receive request ...\n");
-            #endif
-
-            while ((ret = rdma_get_recv_comp(connid, &wc)) == 0)
-            {
-                printf("Waiting for placement ... \n");
-            }
-
-            if (wc.status)
-            {
-                fprintf(stderr, "Fatal error @ #2: %d\n", wc.status);
-                return NULL;
-            }
+            printf("Waiting for placement ... \n");
         }
-        
-        // Now that the buffer is in memory we can copy it into X11
+
+        if (wc.status)
+        {
+            fprintf(stderr, "Fatal error @ #2: %d\n", wc.status);
+            return NULL;
+        }
 
         #ifdef __T_DEBUG__
         printf("Received buffer ...\n");
@@ -500,18 +408,8 @@ void *func(void *void_args)
         }
         fprintf(stderr, "\n");
 
-        /*
-        ret = XPutImage(args->display, args->x11_window, args->gc, ximage,
-            0, 0, 0, 0, WIDTH, HEIGHT);
-        if (ret)
-        {
-            fprintf(stderr, "Error occurred while putting XImage: %d", ret);
-        }
-        */
-        // putimage(args->buffer, args->display, args->visual, args->x11_window, args->gc);
-        noshm_putimage(args->buffer, args->display, args->visual, args->x11_window, args->gc);
-        // XShmPutImage( args->display, args->x11_windAQow, args->gc, args->buffer, 0, 0, 0, 0, WIDTH, HEIGHT, False ) ;
-        
+        putimage(args->buffer, args->display, args->visual, args->x11_window, args->gc);
+
         #ifdef __T_DEBUG__
         printf("Put the image ... %d\n", ++times);
         #endif
@@ -651,6 +549,15 @@ int main(int argc, char *argv[])
     screen_config->x11_window = window;
     screen_config->gc = gc;
 
+/*
+        struct rdma_cm_id   *connid;
+    struct ibv_mr       *ibv_mr;
+    void                *buffer;
+    Display             *display;
+    Window              x11_window;
+    Visual              *visual;
+    GC                  gc;
+*/
     // Register the memory region to allow remote writes
     // for the image data.
     
@@ -658,78 +565,26 @@ int main(int argc, char *argv[])
     int height = 1080;
     int bpp = 32;
     uint64_t image_bytes = width * height * (bpp / 8);
+    unsigned int *buffer = calloc(image_bytes, 1);
     char *hello_buf = calloc(INLINE_BUFSIZE, 1);
     
-    bool use_shm = false;
+    // First we need to tell the server what memory region we want the client
+    // to use, so we send the required data, which is the image size, the buffer's
+    // size, the key to access the data, and the address in this client's memory.
 
     struct ibv_mr *image_mr;
     struct ibv_wc wc;
-    
-    if (use_shm)
+
+    image_mr = ibv_reg_mr(connid->pd, buffer, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    if (!image_mr)
     {
-        // Create X11 image and register MR for data input
-    
-        XImage *eggs_image;
-        struct shmimage src;
-
-        initimage(&src);
-
-        if(!(eggs_image = shm_create_ximage(display, &src, WIDTH, HEIGHT)))
-        {
-            XCloseDisplay(display);
-            return 1;
-        }
-        
-        // First we need to tell the server what memory region we want the client
-        // to use, so we send the required data, which is the image size, the buffer's
-        // size, the key to access the data, and the address in this client's memory.
-
-        image_mr = ibv_reg_mr(connid->pd, (void *) src.shminfo.shmaddr, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
-        if (!image_mr)
-        {
-            fprintf(stderr, "Error registering memory region: %s", strerror(errno));
-            return 1;
-        }
-        screen_config->buffer = src.shminfo.shmaddr;
-    }
-    else
-    {
-
-        // If SHM is disabled, create a memory region without registration
-        // as a shared memory segment. The system will fall back to the
-        // slower routines, but still allow RDMA writes to the image buffer.
-
-        unsigned int *buffer = calloc(image_bytes, 1);
-
-        image_mr = ibv_reg_mr(connid->pd, (void *) buffer, image_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
-        if (!image_mr)
-        {
-            fprintf(stderr, "Error registering memory region: %s", strerror(errno));
-            return 1;
-        }
-        screen_config->buffer = buffer;
-        
-    }
-
-    // Allocate the memory we need to send the memory region message
-
-    struct ibv_mr *send_mr;
-    char *send_buf = calloc(1, INLINE_BUFSIZE);
-
-    if (!send_buf)
-    {
-        fprintf(stderr, "Could not allocate send buffer.\n");
+        fprintf(stderr, "Error registering memory region: %s", strerror(errno));
         return 1;
     }
 
-    send_mr = rdma_reg_msgs(connid, send_buf, INLINE_BUFSIZE);
-    if (!send_mr)
-    {
-        fprintf(stderr, "Could not allocate sending MR.\n");
-        return 1;
-    }
-    
-    T_InlineBuff *mem_msg = (T_InlineBuff *) send_buf;
+    screen_config->buffer = buffer;
+
+    T_InlineBuff *mem_msg = (T_InlineBuff *) buffer;
     mem_msg->data_type = T_INLINE_DATA_CLI_MR;
     mem_msg->addr = image_mr->addr;
     mem_msg->size = image_bytes;
@@ -739,10 +594,16 @@ int main(int argc, char *argv[])
     uint32_t dtype, rkey, nbufs;
     uint64_t addr, size;
 
-    printf("Send buffer and mem_msg\n");
-    printb(send_buf, INLINE_BUFSIZE);
-    printb((char *) mem_msg, sizeof(T_InlineBuff));
-    printf("-----------------------\n");
+    for(int i=0; i < INLINE_BUFSIZE ; i++)
+    {
+    printf("%hhx", *((char *) buffer + i));
+    }
+    printf("\n");
+
+    for(int i=0; i < sizeof(T_InlineBuff) ; i++){
+        printf("%hhx", *((char *) mem_msg + i));
+    }
+    printf("\n");
 
     printf( "------- Client information -------\n"
             "(Type: %20lu) (Addr: %20lu)\n"
@@ -752,53 +613,12 @@ int main(int argc, char *argv[])
             (uint64_t) mem_msg->data_type, (uint64_t) mem_msg->addr, (uint64_t) mem_msg->size,
             (uint64_t) mem_msg->rkey, (uint64_t) mem_msg->numbufs);
 
-    // Send the memory region information so the server knows where to perform
-    // the RDMA write operations to
-    
-    ret = rdma_post_send(connid, NULL, (void *) send_buf, INLINE_BUFSIZE, image_mr, IBV_SEND_INLINE);
+    ret = rdma_post_send(connid, NULL, (void *) buffer, INLINE_BUFSIZE, image_mr, IBV_SEND_INLINE);
     while ((ret = rdma_get_send_comp(connid, &wc)) == 0)
     {
         printf("Sending post send data...\n");
     }
 
-    bool use_tcp = true;
-    int connfd = -1;
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-
-    if (use_tcp)
-    {
-
-        connfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (connfd < 0)
-        {
-            fprintf(stderr, "Failed to create the TCP socket!\n");
-            return 1;
-        }
-        printf("Created TCP event notification socket.\n");
-
-        int flag = 1;
-        ret = setsockopt(connfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
-        if (ret < 0)
-        {
-            fprintf(stderr, "Cannot set socket options.\n");
-            return 1;
-        }
-
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_addr.s_addr = inet_addr(argv[1]);
-        server_addr.sin_port = htons(9999);
-
-        ret = connect(connfd, (struct sockaddr *) &server_addr, sizeof(server_addr));
-        if (ret != 0)
-        {
-            fprintf(stderr, "Could not connect to the server.\n");
-            return 1;
-        }
-
-    }
-
-    screen_config->tcp_server_fd = connfd;
     //conn_config->connid = connid;
 
     //th1 = pthread_create(&thread1, NULL, capture_mouse_keyboard, (void *) mouse_config);
