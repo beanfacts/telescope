@@ -26,22 +26,15 @@ We recommend checking out [Parsec](https://parsec.app/) or [NoMachine](https://n
 Telescope stream resolution is determined by your monitor resolution and refresh rate of your X display.
 By default, it streams at 24bpp without any chroma subsampling - For a 1080p/60Hz video stream, you will require approximately 3.1 Gbps of available network throughput.  
 To calculate your bandwidth requirement, the formula is:  
-`BW (Mbps) = <width> * <height> * <bit depth> * <framerate>`.
+`BW (Mbps) = <width> * <height> * <bit depth> * <framerate> / 1048576`.
 
 ## Test environment
-- OS: Pop!\_OS 20.10
+- OS: Pop!\_OS 20.10, Debian 10.0, Ubuntu 18.04
 - NIC: Mellanox ConnectX-3 10GbE NIC w/ RDMA
-- Required packages: rdma-core, libibverbs, rdmacm-utils, libx11-dev, libxtst-dev, libxcb1-dev
 
 ## Installing Telescope
 
-1. Run the following commands to install all the dependencies for Telescope
-```bash
-sudo apt update
-sudo apt install git rdma-core libibverbs rdmacm-utils libx11-dev libxtst-dev libxcb1-dev -y
-```
-
-2. Wait for the project to be completed...
+Please refer to the [wiki](https://github.com/beanfacts/telescope/wiki) for setup instructions.
 
 ## Copyright
 &copy; 2021 Telescope Project Developers  
