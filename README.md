@@ -36,7 +36,7 @@ To calculate your bandwidth requirement, the formula is:
 
 ## Installing Telescope
 
-Please refer to the [wiki](https://github.com/beanfacts/telescope/wiki) for setup instructions.
+Please refer to the [wiki](https://github.com/beanfacts/telescope/wiki/Installing-Telescope) for setup instructions.
 
 ## Copyright
 &copy; 2021 Telescope Project Developers  
