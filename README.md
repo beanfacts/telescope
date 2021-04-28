@@ -1,5 +1,7 @@
-<h1 align='center'>🔭Telescope🔭</h1>
-
+<p align="center">
+  <img width=150 src="https://i.ibb.co/YZ7w1Dw/telescope.png" alt="telescope" align='center'>
+</p>
+<h1 align='center'>Telescope</h1>
 ## What is it?
 Telescope is a high-performance remote desktop streaming solution that uses RDMA-capable hardware for low latency and CPU usage at full quality.  
 It supports RDMA capable Ethernet (RoCE) or InfiniBand (RDMAoIB) networking hardware, as well as software RDMA.
