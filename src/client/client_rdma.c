@@ -1,3 +1,9 @@
+/*
+    SPDX-License-Identifier: AGPL-3.0-or-later
+    Telescope RDMA Client
+    Copyright (C) 2021 Telescope Project
+*/
+
 // Basic stuff
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,37 +23,23 @@
 #include <rdma/rdma_verbs.h>
 #include <infiniband/verbs.h>
 
-// XCB stuff
-#include <xcb/xproto.h>
-#include <xcb/xcb.h>
-#include <xcb/xfixes.h>
-
 // X11 stuff
-#include <sys/shm.h>
-#include <X11/Xutil.h>
-#include <X11/Xlib-xcb.h>
-#include <X11/Xlib.h>
 #include <X11/Xatom.h>
-#include <X11/extensions/XShm.h>
 
-
+#include "receive_shm.h"
+#include "input_xcb.h"
 #include "../common/rdma_common.h"
 
-#define MAX 10000000 
-#define PORT 6969 
-#define SA struct sockaddr 
-#define WIDTH 1920
-#define HEIGHT 1080
-
-pthread_mutex_t lock;
 #define INLINE_BUFSIZE 32
 #define TOTAL_WR 3
 #define TOTAL_SGE 1
 
 #define __T_DEBUG__
 
-static struct rdma_cm_id *connid;
 static bool use_tcp = true;
+static int num_tests = 0;
+
+/* Thread argument parameters */
 
 typedef struct {
     struct rdma_cm_id   *connid;
@@ -68,44 +60,9 @@ typedef struct {
     int                 tcp_server_fd;
 } screen_param;
 
-struct shmimage
-{
-    XShmSegmentInfo shminfo ;
-    XImage * ximage ;
-    unsigned int * data ; // will point to the image's BGRA packed pixels
-} ;
+/* Mouse and keyboard capture and sending threads */
 
-
-// static void setCursor (xcb_connection_t*, xcb_screen_t*, xcb_window_t, int);
-static void testCookie(xcb_void_cookie_t, xcb_connection_t*, char *); 
-
-static void testCookie (xcb_void_cookie_t cookie, xcb_connection_t *connection, char *errMessage)
-{
-    xcb_generic_error_t *error = xcb_request_check (connection, cookie);
-    if (error) {
-        fprintf (stderr, "ERROR: %s : %d\n", errMessage , error->error_code);
-        xcb_disconnect (connection);
-        exit (-1);
-    }
-}
-
-void get_center(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *ret_ceny)
-{
-
-    xcb_get_geometry_cookie_t cookie;
-    xcb_get_geometry_reply_t *reply;
-
-    cookie = xcb_get_geometry_unchecked(c, window);
-    if ((reply = xcb_get_geometry_reply(c, cookie, NULL))) {
-        *ret_cenx = (reply->width)/2;
-        *ret_ceny = (reply->height)/2;   
-    }
-    free(reply);
-}
-
-int num_tests = 0;
-
-void send_input(struct rdma_cm_id * connid, char *buff, struct ibv_mr *send_mr) 
+void send_mouse_data(struct rdma_cm_id * connid, char *buff, struct ibv_mr *send_mr) 
 {  
     printf("Sending...");
     fflush(stdout);
@@ -127,26 +84,9 @@ void send_input(struct rdma_cm_id * connid, char *buff, struct ibv_mr *send_mr)
     fflush(stdout);
 }
 
-void get_param(xcb_connection_t *c, xcb_window_t window, int *ret_cenx, int *ret_ceny, int *ret_left, int *ret_right, int *ret_upper, int *ret_bottom) {
-    xcb_get_geometry_cookie_t cookie;
-    xcb_get_geometry_reply_t *reply;
-
-    cookie = xcb_get_geometry(c, window);
+void *capture_mouse_keyboard(void *args)
+{
     
-    if ((reply = xcb_get_geometry_reply(c, cookie, NULL))) {
-		*ret_cenx = (reply->width)/2;
-		*ret_ceny = (reply->height)/2;
-        *ret_left = 100;
-        *ret_right = (reply->width)-100;
-        *ret_upper = 50;
-        *ret_bottom = (reply->height)-50;        
-    }
-    free(reply);
-}
-
-void *capture_mouse_keyboard(void *args) {
-    
-    return NULL;
     mouse_param *mouse_kb = (mouse_param*) args;
     int ret;
     
@@ -159,7 +99,7 @@ void *capture_mouse_keyboard(void *args) {
     
     // Allocate memory so that this segment can be transferred over RDMA
     char *send_buf = calloc(INLINE_BUFSIZE, 1);
-    struct ibv_mr *send_mr = rdma_reg_msgs(connid, send_buf, INLINE_BUFSIZE);
+    struct ibv_mr *send_mr = rdma_reg_msgs(mouse_kb->connid, send_buf, INLINE_BUFSIZE);
     
     int cenx, ceny;  
     int flag = 0;
@@ -186,7 +126,6 @@ void *capture_mouse_keyboard(void *args) {
                 xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *) event;
                 get_param(mouse_kb->c, mouse_kb->x11_window, &cenx, &ceny, &left, &right, &upper, &bottom);
                 
-                // Calculate the amount that the mouse move
                 new_x = motion->event_x;	
                 new_y = motion->event_y;
 
@@ -196,7 +135,8 @@ void *capture_mouse_keyboard(void *args) {
                 pre_x = motion->event_x;
                 pre_y = motion->event_y;
 
-                if ((left >= pre_x)||(pre_x>=right)||(upper>=pre_y)||(bottom<=pre_y)) {    
+                if ((left >= pre_x)||(pre_x>=right)||(upper>=pre_y)||(bottom<=pre_y))
+                {    
                     printf("warp\n");
                     int pre_y = ceny;
                     int new_x = cenx;
@@ -216,7 +156,7 @@ void *capture_mouse_keyboard(void *args) {
                         send_buf[4] = (char) 0;
                         *(int *) (&send_buf[5]) = deltax;
                         *(int *) (&send_buf[9]) = deltay;
-                        send_input(mouse_kb->connid, send_buf, send_mr); 
+                        send_mouse_data(mouse_kb->connid, send_buf, send_mr); 
                     }
                     else
                     {
@@ -235,7 +175,7 @@ void *capture_mouse_keyboard(void *args) {
                 *ptr5 = bp->detail;
 
                 send_buf[9] = (char) 1;
-                send_input(mouse_kb->connid, send_buf, send_mr); 
+                send_mouse_data(mouse_kb->connid, send_buf, send_mr); 
                 break;
             }			
             case XCB_BUTTON_RELEASE:
@@ -248,7 +188,7 @@ void *capture_mouse_keyboard(void *args) {
                 *ptr6 = br->detail;
 
                 send_buf[9] = (char) 0;
-                send_input(mouse_kb->connid, send_buf, send_mr); 
+                send_mouse_data(mouse_kb->connid, send_buf, send_mr); 
 
                 break;
             }
@@ -262,7 +202,7 @@ void *capture_mouse_keyboard(void *args) {
                 *ptr =  kp->detail;
 
                 send_buf[9] = (char) 1;
-                send_input(mouse_kb->connid, send_buf, send_mr);
+                send_mouse_data(mouse_kb->connid, send_buf, send_mr);
 
                 break;
             }
@@ -276,119 +216,41 @@ void *capture_mouse_keyboard(void *args) {
                 *ptr =  kr->detail;
 
                 send_buf[9] = (char) 0;
-                send_input(mouse_kb->connid, send_buf, send_mr);
+                send_mouse_data(mouse_kb->connid, send_buf, send_mr);
 
                 break;
             }
-            /*
-            case XCB_ENTER_NOTIFY:{
+            case XCB_ENTER_NOTIFY:
+            {
                 xcb_xfixes_hide_cursor(mouse_kb->c, mouse_kb->screen->root);
                 printf("enter\n");
                 break;
             }
-            case XCB_LEAVE_NOTIFY:{
+            case XCB_LEAVE_NOTIFY:
+            {
                 xcb_xfixes_show_cursor(mouse_kb->c, mouse_kb->screen->root);
-                // setCursor (mouse_kb->c, mouse_kb->screen, mouse_kb->xcb_window, 58);
                 printf("leave\n");
                 break;
             }
-            */
             default:
             {
                 printf("Unknown event: %d\n", event->response_type);
                 break;
             }
         }
-    }  
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////
-
-void initimage( struct shmimage * image )
-{
-    image->ximage = NULL ;
-    image->shminfo.shmaddr = (char *) -1 ;
-}
-
-
-void destroyimage( Display * dsp, struct shmimage * image )
-{
-    if( image->ximage )
-    {
-        XShmDetach( dsp, &image->shminfo ) ;
-        XDestroyImage( image->ximage ) ;
-        image->ximage = NULL ;
-    }
-
-    if( image->shminfo.shmaddr != ( char * ) -1 )
-    {
-        shmdt( image->shminfo.shmaddr ) ;
-        image->shminfo.shmaddr = ( char * ) -1 ;
     }
 }
 
+/* Screen receive and draw thread */
 
-XImage *shm_create_ximage(Display *display, struct shmimage * image, int width, int height )
+void *screen_recv(void *void_args) 
 {
-    image->shminfo.shmid = shmget( IPC_PRIVATE, width * height * 4, IPC_CREAT | 0600 ) ;
-    if( image->shminfo.shmid == -1 )
-    {
-        perror( "screencap" ) ;
-        return false ;
-    }
-
-    image->shminfo.shmaddr = (char *) shmat( image->shminfo.shmid, 0, 0 ) ;
-    if( image->shminfo.shmaddr == (char *) -1 )
-    {
-        perror( "screencap" ) ;
-        return false ;
-    }
-    image->data = (unsigned int*) image->shminfo.shmaddr ;
-    image->shminfo.readOnly = false ;
-
-    shmctl( image->shminfo.shmid, IPC_RMID, 0 ) ;
-
-    image->ximage = XShmCreateImage( display, XDefaultVisual( display, XDefaultScreen( display ) ),
-                        DefaultDepth( display, XDefaultScreen( display ) ), XYPixmap, 0,
-                        &image->shminfo, 0, 0 ) ;
-    if( !image->ximage )
-    {
-        destroyimage( display, image ) ;
-        printf(": could not allocate the XImage structure\n" ) ;
-        return false ;
-    }
-
-
-    // return XShmCreateImage(display, visual, 24, ZPixmap, 0, image, width, height, 32, 0);
-    // return XCreateImage(display, visual, 24, ZPixmap, 0, image, width, height, 32, 0);
-}
-
-
-XImage *noshm_create_ximage(Display *display, Visual *visual, int width, int height, char *image)
-{
-    return XCreateImage(display, visual, 24,ZPixmap, 0, image, width, height, 32, 0);
-}
-
-
-int noshm_putimage(char *image, Display *display, Visual *visual, Window window, GC gc)
-{    
-    XImage *ximage = noshm_create_ximage(display, visual, WIDTH, HEIGHT, image);
-    XEvent event;
-    bool exit = false;
-    int r;
-    // r = XShmPutImage(display, window, gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT, False);
-    r = XPutImage(display, window, gc, ximage, 0, 0, 0, 0, WIDTH, HEIGHT);
-    printf("RES: %i\n", r);
-    return 0;
-}
-
-
-void *func(void *void_args) 
-{
+    
     screen_param *args = (screen_param *) void_args;
     struct ibv_wc wc;
     struct ibv_mr *recv_mr, *send_mr;
     int ret;
+
     // This packet is sent to request a buffer write from the server
     char *send_buff = calloc(1, INLINE_BUFSIZE);
     *(int *) (send_buff) = T_REQ_BUFFER_WRITE;
@@ -420,39 +282,6 @@ void *func(void *void_args)
     while (1)
     {
 
-        /*
-        #ifdef __T_DEBUG__
-        printf("Posting send request...\n");
-        #endif
-
-        // Send the buffer write request
-        ret = rdma_post_send(args->connid, NULL, send_buff, INLINE_BUFSIZE, send_mr, 0);
-        if (ret)
-        {
-            fprintf(stderr, "Error occurred while posting send request: %s\n", strerror(errno));
-        }
-
-        #ifdef __T_DEBUG__
-        printf("Posted send request ...\n");
-        #endif
-
-        // Send the request and wait for the send to complete
-
-        while ((ret = rdma_get_send_comp(connid, &wc)) == 0)
-        {
-            printf("Sending request ... \n");
-        }
-        if (wc.status)
-        {
-            fprintf(stderr, "Fatal error @ #1: %d\n", wc.status);
-            return NULL;
-        }
-
-        #ifdef __T_DEBUG__
-        printf("Got send completion ...\n");
-        #endif
-        */
-
         // Wait for the server to send a confirmation back that the data has
         // been sent successfully.
 
@@ -461,7 +290,6 @@ void *func(void *void_args)
             ret = read(args->tcp_server_fd, recv_buff, INLINE_BUFSIZE);
             if (ret < 0)
             {
-                //fprintf(stderr, "Could not read any data ... \n");
                 continue;
             }
         }
@@ -477,7 +305,7 @@ void *func(void *void_args)
             printf("Posted receive request ...\n");
             #endif
 
-            while ((ret = rdma_get_recv_comp(connid, &wc)) == 0)
+            while ((ret = rdma_get_recv_comp(args->connid, &wc)) == 0)
             {
                 printf("Waiting for placement ... \n");
             }
@@ -489,7 +317,7 @@ void *func(void *void_args)
             }
         }
         
-        // Now that the buffer is in memory we can copy it into X11
+        // Now that the buffer is in memory we can copy it into X11 for later use
 
         #ifdef __T_DEBUG__
         printf("Received buffer ...\n");
@@ -499,18 +327,7 @@ void *func(void *void_args)
             fprintf(stderr, "%hhx", *((char *) args->buffer + i));
         }
         fprintf(stderr, "\n");
-
-        /*
-        ret = XPutImage(args->display, args->x11_window, args->gc, ximage,
-            0, 0, 0, 0, WIDTH, HEIGHT);
-        if (ret)
-        {
-            fprintf(stderr, "Error occurred while putting XImage: %d", ret);
-        }
-        */
-        // putimage(args->buffer, args->display, args->visual, args->x11_window, args->gc);
         noshm_putimage(args->buffer, args->display, args->visual, args->x11_window, args->gc);
-        // XShmPutImage( args->display, args->x11_windAQow, args->gc, args->buffer, 0, 0, 0, 0, WIDTH, HEIGHT, False ) ;
         
         #ifdef __T_DEBUG__
         printf("Put the image ... %d\n", ++times);
@@ -518,7 +335,7 @@ void *func(void *void_args)
     }
 } 
 
-///////////////////////////////////////////////////////////////////////////////////////////
+/* Control thread */
 
 int main(int argc, char *argv[]) 
 {    
@@ -537,6 +354,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    struct rdma_cm_id *connid = malloc(sizeof(struct rdma_cm_id));
     new(struct ibv_qp_init_attr, init_attr);
     
     // Allow the same QP to be used by two threads with 256 bytes
@@ -712,6 +530,8 @@ int main(int argc, char *argv[])
     }
 
     // Allocate the memory we need to send the memory region message
+    // Generally inline buffers do not need to be registered by
+    // rdma_reg_msgs, but it is registered in case inline sends are disabled.
 
     struct ibv_mr *send_mr;
     char *send_buf = calloc(1, INLINE_BUFSIZE);
@@ -729,6 +549,8 @@ int main(int argc, char *argv[])
         return 1;
     }
     
+    // Prepare memory information to be sent to the server for
+    // RDMA writes
     T_InlineBuff *mem_msg = (T_InlineBuff *) send_buf;
     mem_msg->data_type = T_INLINE_DATA_CLI_MR;
     mem_msg->addr = image_mr->addr;
@@ -803,7 +625,7 @@ int main(int argc, char *argv[])
 
     //th1 = pthread_create(&thread1, NULL, capture_mouse_keyboard, (void *) mouse_config);
     //th2 = pthread_create(&thread2, NULL, poll_completion, (void *) conn_config);
-    th2 = pthread_create(&thread2, NULL, func, (void*) screen_config);
+    th2 = pthread_create(&thread2, NULL, screen_recv, (void*) screen_config);
 
     //pthread_join(thread1, NULL);
     pthread_join(thread2, NULL);

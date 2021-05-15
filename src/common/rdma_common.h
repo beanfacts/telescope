@@ -1,3 +1,9 @@
+/*
+    SPDX-License-Identifier: AGPL-3.0-or-later
+    Telescope Common RDMA Functions
+    Copyright (C) 2021 Telescope Project
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <rdma/rsocket.h>
@@ -47,7 +53,9 @@
 #define heapnew(type, x) type x = calloc(1, sizeof(type))   // Create a new zeroed item (on heap)
 #define println(x) printf(x "\n");
 
-void printb(char *buff, int n)
+/* Print a string as a series of hex bytes */
+
+static inline void printb(char *buff, int n)
 {
     for(int i=0; i < n; i++)
     {
@@ -125,37 +133,3 @@ typedef struct {
     unsigned int chroma;                // Chroma subsampling type if any
     unsigned int ximage_type;           // X Image type (XYPixmap, ZPixmap)
 } T_ScreenMeta;
-
-/*  Returns the number of displays available on the server.
-    The data must be freed when done!
-*/
-T_List *get_displays(int connfd);
-
-/*  Perform a complete read (mode 0), or write (mode 1), of len bytes into buffer *data.
-
-    Returns when all the data has been written, or more than max_attempts
-    attempts have been made to transfer the data to the other side.
-
-    A failed attempt is counted as a read/write which returned fewer than
-    or equal to min_xfer_threshold bytes, and counted sequentially.
-
-    Returns 1 if successful, 0 if not.
-*/
-int full_xfer(int mode, int connfd, void *data, int len, int min_xfer_threshold, float timeout, int usleep_duration);
-
-/*  Request the server draw its display contents for the client.
-    
-    The server must know which display to send, which memory region to write
-    the data to, the index of the display as returned by get_displays(), and
-    if the data is double buffered, the number of the buffer to write to. In
-    the case that the client does not have a double buffer, the index of the
-    buffer is always 0.
-*/
-int req_image(int connfd, int dpy_index, off_t offset, int buf_index);
-
-/*  Request the server prepare its image capture backend for transmission given
-    the requested image parameters.
-
-    Future support for the transmission of multiple displays is planned.
-*/
-int prepare_image(int connfd, int dpy_index, int chroma);

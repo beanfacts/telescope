@@ -1,8 +1,6 @@
 RDMA_REQ="rdma-core rdmacm-utils librdmacm-dev libx11-dev xcb-proto libxcb-xfixes0-dev libxtst-dev"
 RDMA_OPT="perftest infiniband-diags"
 
-if []
-
 while [ "$REPLY" != "y" ] && [ "$REPLY" != "n" ]
 do
     echo -n "Update system before install? (y/n): "
