@@ -51,7 +51,6 @@ typedef struct {
 
 typedef struct {
     struct rdma_cm_id   *connid;
-    struct ibv_mr       *ibv_mr;
     void                *buffer;
     Display             *display;
     Window              x11_window;

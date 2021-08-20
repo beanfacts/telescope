@@ -6,52 +6,43 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <rdma/rsocket.h>
+#include <unistd.h>
 
-/* Message type definitions */
+#define CM_X11                  1
 
-#define T_MSG_INVALID           0x00        // Invalid message, can be used to signal that an received message was invalid
-#define T_MSG_KEEP_ALIVE        0x02        // Keep the connection alive (not used)
+/*  Message type definitions (32-bit)
+    These type definitions should be sent as immediate data to allow the
+    receiver to understand the message type and decode it appropriately.
+*/
 
-#define T_REQ_SCREEN_DATA       0x10        // Request the screen data, such as resolution and # of screens, from the server.
-#define T_REQ_SERVER_PREPARE    0x11        // Request the server prepare resources needed to send an image to the client.
-#define T_REQ_BUFFER_WRITE      0x12        // Request the server write the screen data into the client's buffer.
-#define T_REQ_CLIENT_BUF_DATA   0x13        // Request the buffer data of the client, such as the RDMA rkey.
+#define T_MSG_INVALID           htonl(0x0000)   // Invalid message, can be used to signal that an received message was invalid
+#define T_MSG_KEEP_ALIVE        htonl(0x0002)   // Keep the connection alive (not used)
 
-#define T_META_SCREEN_DATA      0x20        // Server response to a client request for server screen data
-#define T_META_BUFFER_DATA      0x21        // Client response to a server request for client buffer data
+#define T_NEG_SERVER_HELLO      htonl(0x0010)   // Server Hello Packet
+#define T_NEG_CLIENT_HELLO      htonl(0x0011)   // Client Hello Packet
+#define T_NEG_SERVER_BUF_DATA   htonl(0x0012)   // Server Buffer Data
 
-#define T_NOTIFY_XFER_DONE      0x30        // Server notification to client that transfer of data is done
-#define T_NOTIFY_XFER_FAIL      0x31        // Server notification to client that transfer of data has failed
+/*  Pixel format types (32-bit)
+    Both the server and client must understand each others' pixel formats,
+    either natively or using conversion, in order for the connection to be
+    established.
+*/
 
-#define T_INLINE_DATA_HID       0x40        // Inline data containing mouse and keyboard information
-#define T_INLINE_DATA_CLI_MR    0x41        // Inline data containing the client memory information
+#define T_PF_NULL               0x0000      // Placeholder for "no capture method available"
 
-/* Chroma subsampling types */
+#define T_PF_ARGB_LE_32         0x0010      // BGRA packed pixels (little endian ARGB), with 32 bits per pixel.
+#define T_PF_RGB_LE_24          0x0020      // BGR packed pixels (little endian RGB), with 24 bits per pixel.
 
-#define CHR_ASIS                0x00        // Used for client request, send the image as it is on the server
+#define CHR_YUV_444             0x0100      // YCbCr chroma with no subsampling
+#define CHR_YUV_422             0x0110      // YCbCr 4:2:2 subsampled image
+#define CHR_YUV_420             0x0120      // YCbCr 4:2:0 subsampled image
 
-#define CHR_BGRA_32             0x01        // BGRA packed pixels, either Z or XY, with 32 bits per pixel.
-                                            // Note that if the image is in XY format, the alpha channel resides
-                                            // in memory but is never actually sent from the server.
-#define CHR_BGR_24              0x03        // BGRA packed pixels, either Z or XY, with 24 bits per pixel.
+/* Helper macros for common operations */
 
-#define CHR_YUV_444             0x10        // 
-#define CHR_YUV_422             0x11
-#define CHR_YUV_420             0x12
-
-/* Transfer type definitions and timeouts */
-
-#define XFER_READ   0
-#define XFER_WRITE  1
-#define msec(x) (x * 1000)
-
-/* Helper macros for common RDMACM operations */
-
-#define clear(x) memset(&x, 0, sizeof(x))                   // Clear fields of an existing variable
-#define new(type, x) type x; memset(&x, 0, sizeof(x))       // Create a new zeroed item (on stack)
-#define heapnew(type, x) type x = calloc(1, sizeof(type))   // Create a new zeroed item (on heap)
-#define println(x) printf(x "\n");
+#define clear(x) memset(&x, 0, sizeof(x))                       // Clear fields of an existing variable
+#define new(type, x) type x; memset(&x, 0, sizeof(x))           // Create a new zeroed item (on stack)
+#define heapnew(type, x) type *x = calloc(1, sizeof(type))      // Create a new zeroed item (on heap)
+#define println(x) printf(x "\n");                              // Print with new line...
 
 /* Print a string as a series of hex bytes */
 
@@ -112,24 +103,91 @@ typedef struct {
     uint32_t    numbufs;
 } T_InlineBuff;
 
-/* Screen metadata */
+/* Screen Capture Metadata */
 
 typedef struct {
-    unsigned int screen_index;          // Screen number
-    unsigned int screen_offset_x;       // X Screen offset (x)
-    unsigned int screen_offset_y;       // X Screen offset (y)
-    unsigned int width;                 // Screen width in pixels
-    unsigned int height;                // Screen height in pixels
-    unsigned int bits_per_pixel;        // Screen bit depth
-    unsigned int framerate;             // Vertical sync framerate
-} T_ScreenData;
+    uint32_t    capture_type;   // Screen capture provider (X11 etc.)
+    uint32_t    width;          // Native width
+    uint32_t    height;         // Native height
+    uint32_t    fps;            // Native framerate
+    uint16_t    bpp;            // Screen bits per pixel
+    uint16_t    format;         // Screen pixel format
+    union
+    {
+        struct {
+            Display     *display;
+            Window      window;
+            int         screen_no;
+        };
+    };
+} T_Screen;
 
-/* Screen header for transferred image */
+/* Initial Data Exchange Packets */
 
+/*  The server first sends this hello packet to inform the client about its
+    native pixel map and egress bandwidth available to service the user's 
+    request.
+*/
 typedef struct {
-    unsigned int screen_index;          // Screen number
-    unsigned int width;                 // Screen width in pixels
-    unsigned int height;                // Screen height in pixels
-    unsigned int chroma;                // Chroma subsampling type if any
-    unsigned int ximage_type;           // X Image type (XYPixmap, ZPixmap)
-} T_ScreenMeta;
+    uint64_t    avail_bw;       // Bandwidth limit (bits/second)
+    uint64_t    avail_mem;      // Memory limit (bytes)
+    uint32_t    s_width;        // Native width
+    uint32_t    s_height;       // Native height
+    uint32_t    s_fps;          // Native framerate
+    uint16_t    s_format;       // Screen pixel format
+} __attribute__((__packed__)) T_ServerHello;
+
+/*  The client then replies back with the format it wants from the server.
+    If the client wants the server to send the native pixmap for the highest
+    performance, the client can simply echo back the parameters it received 
+    from the server.  
+    The client is responsible for ensuring there is 
+    enough available downstream bandwidth to handle the RDMA reads, as the
+    server is not responsible for performing or throttling reads.
+*/
+typedef struct {
+    uint32_t    s_width;        // Requested width
+    uint32_t    s_height;       // Requested height
+    uint32_t    s_fps;          // Requested framerate
+    uint16_t    s_bpp;          // Screen bits per pixel
+    uint16_t    s_format;       // Screen pixel format
+    uint16_t    rdma_bufs;      // Number of buffers to use for page flipping.
+} __attribute__((__packed__)) T_ClientHello;
+
+/*  The server then performs memory allocation according to the client's
+    request. If the request is invalid, it's indicated as such.
+*/
+typedef struct {
+    uint32_t    ok_flag;        // If everything is ok, indicate 0xffffffff
+    uint64_t    fb_addr;        // Frame buffer address
+    uint64_t    fb_size;        // Frame buffer size
+    uint64_t    st_addr;        // State buffer address
+    uint64_t    st_size;        // State buffer size
+    uint32_t    fb_rkey;        // Frame buffer RDMA key
+    uint32_t    st_rkey;        // State buffer RDMA key
+    uint32_t    fb_bufs;        // Frame buffer number of sub-buffers
+} __attribute__((__packed__)) T_ServerBuffData;
+
+/*  At this point, the connection is established. The client is responsible
+    for telling the server which buffers need to be read.
+*/
+
+// Get the page-aligned size for a single frame
+inline int paligned_fsize(int width, int height, int bpp)
+{
+    int ps = getpagesize();
+    int raw_fsize = (width * height * (bpp / 8));
+    return raw_fsize + (ps - (raw_fsize % ps));
+}
+
+/* Linked list containing information about every buffer */
+typedef struct {
+    union {
+        struct {
+            XShmSegmentInfo     shminfo;        // Shared memory segment info
+            uint32_t            bufid;          // Item number in buffer
+            XImage              *ximage;        // X Image containing metadata
+        };
+    };
+    T_ImageList *next;  // Next item in buffer
+} T_ImageList;
