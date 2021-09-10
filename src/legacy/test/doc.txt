@@ -1,0 +1,17 @@
+Running json_client and json_server
+
+./json_cli \
+    --host <hostname>           # Required | Server Hostname
+    --nc_port <port>            # Required | TCP Negotiation Channel Port
+    --port <port>               # RDMA Server Port number
+    --fmem_limit <mb>           # Single frame memory limit in KiB
+    --pmem_limit <mb>           # Pinned memory limit in KiB
+    --pages <n>                 # Number of pages/buffers to use in the output
+
+./json_srv \
+    --host <hostname>           # Required | Hostname
+    --nc_port <port>            # Required | TCP Negotiation Channel Port
+    --port <port>               # RDMA Server Port number
+    --fmem_limit <mb>           # Single frame memory limit in
+    --pmem_limit <mb>           # Pinned memory limit in KiB
+    --pages <n>                 # Number of pages/buffers to use in the output

@@ -1,0 +1,49 @@
+```md
+src
+    \- CMakeLists.txt
+    \- bin
+        \- server.o
+        \- client.o
+    \- lib
+        \- capture
+            \- capture.c
+            \- capture.h
+            \- capture_x11.c
+            \- capture_x11.h
+            \- capture_nvfbc.c
+            \- capture_nvfbc.h
+            \- capture_amf.c
+            \- capture_amf.h      
+        \- transport
+            \- transport.c
+            \- transport.h
+            \- transport_ucx.c
+            \- transport_ucx.h
+            \- transport_rdmacm.c
+            \- transport_rdmacm.h
+        \- hid
+            \- keyboard
+                \- hid_keyboard.c
+                \- hid_keyboard.h
+            \- mouse
+                \- hid_mouse.c
+                \- hid_mouse.h
+            \- usbip
+                \- hid_usbip.c
+                \- hid_usbip.h
+        \- audio
+            \- pulsectl.c
+            \- pulsectl.h
+        \- ui
+            \- sprites
+                \- mouse_cursor
+            \- images
+                \- logo
+                    \- logo.png
+            \- qt5
+                \- 
+    \- client
+        \- client.c
+    \- server
+        \- server.c
+```

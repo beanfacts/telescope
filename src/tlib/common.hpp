@@ -4,38 +4,13 @@
     Copyright (C) 2021 Telescope Project
 */
 
+#ifndef TSC_COMMON_H
+#define TSC_COMMON_H
+
 #include <stdio.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <unistd.h>
-
-#define CM_X11                  1
-
-/*  Message type definitions (32-bit)
-    These type definitions should be sent as immediate data to allow the
-    receiver to understand the message type and decode it appropriately.
-*/
-
-#define T_MSG_INVALID           htonl(0x0000)   // Invalid message, can be used to signal that an received message was invalid
-#define T_MSG_KEEP_ALIVE        htonl(0x0002)   // Keep the connection alive (not used)
-
-#define T_NEG_SERVER_HELLO      htonl(0x0010)   // Server Hello Packet
-#define T_NEG_CLIENT_HELLO      htonl(0x0011)   // Client Hello Packet
-#define T_NEG_SERVER_BUF_DATA   htonl(0x0012)   // Server Buffer Data
-
-/*  Pixel format types (32-bit)
-    Both the server and client must understand each others' pixel formats,
-    either natively or using conversion, in order for the connection to be
-    established.
-*/
-
-#define T_PF_NULL               0x0000      // Placeholder for "no capture method available"
-
-#define T_PF_ARGB_LE_32         0x0010      // BGRA packed pixels (little endian ARGB), with 32 bits per pixel.
-#define T_PF_RGB_LE_24          0x0020      // BGR packed pixels (little endian RGB), with 24 bits per pixel.
-
-#define CHR_YUV_444             0x0100      // YCbCr chroma with no subsampling
-#define CHR_YUV_422             0x0110      // YCbCr 4:2:2 subsampled image
-#define CHR_YUV_420             0x0120      // YCbCr 4:2:0 subsampled image
+#include <cstdint>
 
 /* Helper macros for common operations */
 
@@ -55,58 +30,10 @@ static inline void printb(char *buff, int n)
     printf("\n");
 }
 
-/* Message header */
-
-typedef struct {
-    int msg_type;       // Message type (see Message Type Definitions)
-    int length;         // Message length
-    int msg_id;         // Message identifier for asynchronous operation
-    int num_msgs;       // Number of messages following of this type
-} T_MsgHeader;
-
-/* Server-side buffer preparation request structure */
-
-typedef struct {
-    int dpy_index;      // Requested display index
-    int chroma;         // Requested subsampling of the image contents
-} T_PrepareReq;
-
-/* Client write request structure */
-
-typedef struct {
-    int dpy_index;      // Requested display index
-    int chroma;         // Requested subsampling of the image contents
-    off_t offset;       // Memory region on the client side
-    int buf_index;      // Buffer index to write to
-} T_WriteReq;
-
-/* Memory buffer information */
-
-typedef struct {
-    long bufsize;       // Buffer size (bytes)
-    off_t offset;       // Memory location offset
-} T_BufferData;
-
-/* Basic array structure */
-
-typedef struct {
-    int elements;       // Number of available elements
-    void *data;         // Pointer to actual data, convert to appropriate type
-} T_List;
-
-/* Inline buffer data */
-typedef struct {
-    uint32_t    data_type;
-    void        *addr;
-    uint64_t    size;
-    uint32_t    rkey;
-    uint32_t    numbufs;
-} T_InlineBuff;
-
 /* Screen Capture Metadata */
 
 typedef struct {
-    uint32_t    capture_type;   // Screen capture provider (X11 etc.)
+    enum tsc_capture_type capture_type;   // Screen capture provider (X11 etc.)
     uint32_t    width;          // Native width
     uint32_t    height;         // Native height
     uint32_t    fps;            // Native framerate
@@ -115,12 +42,12 @@ typedef struct {
     union
     {
         struct {
-            Display     *display;
-            Window      window;
-            int         screen_no;
+            Display     *x_display;
+            Window      x_window;
+            int         x_screen_no;
         };
     };
-} T_Screen;
+} tsc_screen;
 
 /* Initial Data Exchange Packets */
 
@@ -180,7 +107,7 @@ inline int paligned_fsize(int width, int height, int bpp)
     return raw_fsize + (ps - (raw_fsize % ps));
 }
 
-/* Linked list containing information about every buffer */
+/* Linked list containing information about every buffer
 typedef struct {
     union {
         struct {
@@ -191,3 +118,6 @@ typedef struct {
     };
     T_ImageList *next;  // Next item in buffer
 } T_ImageList;
+*/
+
+#endif
