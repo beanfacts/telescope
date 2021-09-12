@@ -1,6 +1,7 @@
-/* 
+/*
     SPDX-License-Identifier: AGPL-3.0-or-later
-    Telescope - Linux Server Host File
+    Telescope - Linux Server Host
+    Copyright (c) 2021 Telescope Project
 */
 
 #include <iostream>
@@ -10,25 +11,39 @@
 #include <cstring>
 
 /* Internal Libraries */
-#include "../tlib/transport/transport.hpp"
-#include "../tlib/capture/capture.hpp"
-#include "../tlib/common.hpp"
+#include "transport/transport.hpp"
+#include "capture/capture.hpp"
+#include "common.hpp"
+
+#define MAX_TRANSPORTS 3
 
 using namespace std;
+
+static void tsc_usage_server(int argc, char **argv)
+{
+    fprintf(stderr, 
+        "Invalid arguments provided.\n"
+        "Usage: %s -c <capture type> -h <host> -p <port> [--rdma <portnum>] [--tcp <portnum>] [--ucx <portnum>]\n",
+        argv[0]
+    );
+}
+
 
 int main(int argc, char **argv)
 {
 
     int ret;
     
-    #pragma region get_args
+    printf("Telescope build " TELESCOPE_VERSION " (GCC %d.%d.%d)\n", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
     
+    // --- Get arguments
+
     // Can be passed to getaddrinfo
     char *host_str  = (char *) calloc(1, 256);
     char *port_str  = (char *) calloc(1, 16);
     
     // Store desktop capture method
-    enum tsc_capture_type cap_method;
+    tsc_capture_type cap_method = TSC_CAPTURE_NONE;
     
     // Valid command line arguments
     static struct option long_options[] =
@@ -46,23 +61,21 @@ int main(int argc, char **argv)
     int option_index    = 0;
     int ok_flag         = 0;
     int transport_index = 0;
-    int use_flags       = 0;
 
     // Initial data exchange transport
     struct tsc_transport init_transport = {
+        .flag = TSC_TRANSPORT_TCP,
         .host = host_str,
         .port = port_str,
     };
 
     // Transport types
-    #define MAX_TRANSPORTS 3
     struct tsc_transport *transports = 
-        (struct tsc_transport *) calloc(1, sizeof(struct tsc_transport) * MAX_TRANSPORTS);
+        (struct tsc_transport *) calloc(1, sizeof(struct tsc_transport) * (MAX_TRANSPORTS + 1));
 
     while (1)
     {
         int c = getopt_long(argc, argv, "r:t:u:h:p:c:", long_options, &option_index);
-        printf("[%s]\n", optarg);
 
         if (c == -1)
             break;
@@ -73,42 +86,42 @@ int main(int argc, char **argv)
                 printf("???\n");
                 break;
             case 'r':
-                printf("r -> %s\n", optarg);
                 if (transport_index >= MAX_TRANSPORTS) { return 1; }
                 transports[transport_index] = {
-                    .flag = TSC_SERVER_USE_RDMACM,
+                    .flag = TSC_TRANSPORT_RDMACM,
                     .host = host_str,
                     .port = strdup(optarg)
                 };
+                ok_flag = ok_flag | 1;
                 transport_index++;
                 break;
             case 't':
-                printf("t -> %s\n", optarg);
                 if (transport_index >= MAX_TRANSPORTS) { return 1; }
                 transports[transport_index] = {
-                    .flag = TSC_SERVER_USE_TCP,
+                    .flag = TSC_TRANSPORT_TCP,
                     .host = host_str,
                     .port = strdup(optarg)
                 };
+                ok_flag = ok_flag | 1;
                 transport_index++;
                 break;
             case 'u':
-                printf("u -> %s\n", optarg);
                 if (transport_index >= MAX_TRANSPORTS) { return 1; }
                 transports[transport_index] = {
-                    .flag = TSC_SERVER_USE_UCX,
+                    .flag = TSC_TRANSPORT_UCX,
                     .host = host_str,
                     .port = strdup(optarg)
                 };
+                ok_flag = ok_flag | 1;
                 transport_index++;
                 break;
             case 'h':
                 strncpy(host_str, optarg, 255);
-                ok_flag = ok_flag | 0b1;
+                ok_flag = ok_flag | 1 << 1;
                 break;
             case 'p':
                 strncpy(port_str, optarg, 15);
-                ok_flag = ok_flag | 0b10;
+                ok_flag = ok_flag | 1 << 2;
                 break;
             case 'c':
                 if (strncasecmp(optarg, "pw", 2) == 0)
@@ -150,7 +163,7 @@ int main(int argc, char **argv)
                     cap_method = TSC_CAPTURE_NONE;
                     return 1;
                 }
-                ok_flag = ok_flag | 0b100;
+                ok_flag = ok_flag | 1 << 3;
                 break;
             default:
                 printf("Invalid argument passed\n");
@@ -158,9 +171,13 @@ int main(int argc, char **argv)
         }
     }
 
-    #pragma endregion
-    
-    #pragma region init_capture
+    if (ok_flag != 0b1111)
+    {
+        tsc_usage_server(argc, argv);
+        return 1;
+    }
+
+    // --- Initialise capture system
 
     // Initialise the screen capture system.
     tsc_screen *screen = (tsc_screen *) calloc(1, sizeof(tsc_screen));
@@ -172,9 +189,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    #pragma endregion
-
-    #pragma region init_server
+    // --- Initialise server
 
     // Initialise the server. Telescope is only designed to handle
     // one client at a time.
@@ -186,7 +201,13 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    #pragma endregion
+    // Wait for the client to request a connection
+    ret = listen(server->init_server->sockfd, 0);
+    if (ret != 0)
+    {
+        fprintf(stderr, "Failed to listen on init channel.\n");
+        return 1;
+    }
 
     printf("Hello world.\n");
 

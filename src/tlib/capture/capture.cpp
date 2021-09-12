@@ -1,12 +1,17 @@
-#include <capture.hpp>
-
 /*
-    Setup the capture system.
-    tsc_screen *screen -> should have capture_type populated.
+    SPDX-License-Identifier: AGPL-3.0-or-later
+    Telescope Desktop Capture Library
+    Copyright (c) 2021 Telescope Project
 */
+
+
+#include "capture.hpp"
+
 int tsc_init_capture(tsc_screen *scr)
 {
 
+    int ret;
+    
     if (scr->capture_type == TSC_CAPTURE_X11)
     {
         // Prepare X server connection for multithreading
@@ -14,10 +19,6 @@ int tsc_init_capture(tsc_screen *scr)
         if (!ret){
             fprintf(stderr, "X11 threading error: %d\n", ret);
             return 1;
-        }
-        else
-        {
-            printf("X11 MT ready (%d) \n", ret);
         }
 
         // Grab the root display
@@ -30,7 +31,7 @@ int tsc_init_capture(tsc_screen *scr)
         }
 
         scr->x_window = XDefaultRootWindow(scr->x_display);
-        scr->x_screen_no = (scr->x_display);
+        scr->x_screen_no = 0;
 
         // Check the X server supports shared memory extensions
         if(!XShmQueryExtension(scr->x_display))
@@ -42,12 +43,21 @@ int tsc_init_capture(tsc_screen *scr)
 
         scr->width  = XDisplayWidth(scr->x_display, scr->x_screen_no);
         scr->height = XDisplayHeight(scr->x_display, scr->x_screen_no);
-        
+
         XRRScreenConfiguration *xrr = XRRGetScreenInfo(scr->x_display, scr->x_window);
         scr->fps = (uint32_t) XRRConfigCurrentRate(xrr);
 
-        printf("Capturing X Screen %d @ %d x %d \n", scr->x_screen_no, scr->width, scr->height);
+        double bw_frame = (double) scr->width * (double) scr->height * (double) scr->fps * (double) 32.0;
+
+        printf( "Capturing X Screen %d (%d x %d @ %d Hz)\n"
+                "Estimated bandwidth: %.3f Gbps\n",
+                 scr->x_screen_no, scr->width, scr->height, scr->fps,
+                 (bw_frame / (double) (1 << 30)));
+
         return 0;
     }
+
+    fprintf(stderr, "Invalid capture function.\n");
+    return 1;
 
 }
