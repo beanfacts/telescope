@@ -191,24 +191,7 @@ int main(int argc, char **argv)
 
     // --- Initialise server
 
-    // Initialise the server. Telescope is only designed to handle
-    // one client at a time.
-    struct tsc_server *server;
-    server = tsc_start_servers(&init_transport, transports, 1);
-    if (!server)
-    {
-        fprintf(stderr, "Server init failed.\n");
-        return 1;
-    }
-
-    // Wait for the client to request a connection
-    ret = listen(server->init_server->sockfd, 0);
-    if (ret != 0)
-    {
-        fprintf(stderr, "Failed to listen on init channel.\n");
-        return 1;
-    }
-
-    printf("Hello world.\n");
+    tsc_server server;
+    server.init_servers(&init_transport, transports, 1);
 
 }

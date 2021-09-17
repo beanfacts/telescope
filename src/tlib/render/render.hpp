@@ -52,8 +52,6 @@ private:
 
     struct _x11_ctx     x11_ctx;
 
-    int trc_init_x11(int width, int height, int mt);
-
 };
 
 

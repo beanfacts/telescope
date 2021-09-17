@@ -6,8 +6,8 @@ CFLAGS += -Itlib
 LIBS = -lrdmacm -libverbs
 LIBS += -lX11 -lXrandr -lXext
 
-SRV_LIBS = tlib/transport/transport.cpp
-SRV_LIBS += tlib/transport/transport_rdmacm.cpp
+SRV_LIBS = tlib/transport/transport.cpp tlib/transport/transport_base.cpp tlib/transport/transport_rdmacm.cpp
+SRV_LIBS += tlib/transport/transport.pb.cc
 SRV_LIBS += tlib/capture/capture.cpp
 
 CLI_LIBS = tlib/render/render.cpp

@@ -51,18 +51,20 @@ static inline void printb(char *buff, int n)
 /* Screen Capture Metadata */
 
 typedef struct {
-    tsc_capture_type capture_type;   // Screen capture provider (X11 etc.)
-    uint32_t    width;          // Native width
-    uint32_t    height;         // Native height
-    uint32_t    fps;            // Native framerate
-    uint16_t    bpp;            // Screen bits per pixel
-    uint16_t    format;         // Screen pixel format
+    tsc_capture_type capture_type;      // Screen capture provider (X11 etc.)
+    uint32_t    width;                  // Native width
+    uint32_t    height;                 // Native height
+    uint32_t    fps;                    // Native framerate
+    uint16_t    bpp;                    // Screen bits per pixel
+    uint16_t    format;                 // Screen pixel format
     union
     {
         struct {
-            Display     *x_display;
-            Window      x_window;
-            int         x_screen_no;
+            Display     *x_display;     // X11 display pointer
+            Window      x_window;       // Window to capture
+            int         x_screen_no;    // X Screen number (not the monitor!)
+            int         x_offset_x;     // Screen offset (x-axis)
+            int         x_offset_y;     // Screen offset (y-axis)
         };
     };
 } tsc_screen;

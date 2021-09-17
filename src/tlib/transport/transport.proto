@@ -1,0 +1,48 @@
+/*
+    SPDX-License-Identifier: AGPL-3.0-or-later
+    Protocol Buffer Definitions
+    Copyright (c) 2021 Telescope Project
+*/
+
+syntax = "proto3";
+
+message pb_hello {
+
+    /* Supported transport type flag */
+    repeated pb_screen transports   = 1;
+
+    /* Native screen resolution & fps */
+    repeated pb_transport screens   = 2;
+
+    /* List of acceptable screen resolutions */
+    repeated pb_accept accept       = 3;
+}
+
+enum pb_pixmap {
+    z_bgr_888                       = 0;
+    z_bgra_888                      = 1;
+    z_rgb_888                       = 2;
+    z_rgba_8888                     = 3;
+}
+
+message pb_screen {
+    uint32 index                    = 1;
+    uint32 res_x                    = 2;
+    uint32 res_y                    = 3;
+    pb_pixmap pixmap                = 4;
+    uint32 hz                       = 5;
+}
+
+message pb_accept {
+    uint32 index                    = 1;
+    uint32 res_x                    = 2;
+    uint32 res_y                    = 3;
+    pb_pixmap pixmap                = 4;
+}
+
+message pb_transport {
+    uint64 flag                     = 1;
+    uint64 max_bw                   = 2;
+    string ip_addr                  = 3;
+    uint32 netmask                  = 4;
+}

@@ -4,12 +4,17 @@
     Copyright (c) 2021 Telescope Project
 */
 
-#include <stdio.h>
+#include <cstdio>
+#include <stdexcept>
 #include "transport_rdmacm.hpp"
 
-struct rdma_cm_id *tsc_init_rdma_server(const char *host, const char *port,
+/* ------------------ Common Transport Functions ------------------ */
+
+/* ------------------ Server Transport Functions ------------------ */
+
+void tsc_server_rdma::init_server(const char *host, const char *port,
         struct rdma_addrinfo *hints, struct rdma_addrinfo **host_res, 
-        struct ibv_qp_init_attr *init_attr )
+        struct ibv_qp_init_attr *init_attr, int backlog )
 {
     int ret;
 
@@ -47,29 +52,26 @@ struct rdma_cm_id *tsc_init_rdma_server(const char *host, const char *port,
     printf("Attempting to listen on %s:%s\n", host, port);
     ret = rdma_getaddrinfo(host, port, hints, host_res);
     if (ret)
-    {
-        fprintf(stderr, "Could not resolve host.\n");
-        return NULL;
-    }
+        throw std::runtime_error("Listen failed.");
     
     // Create RDMA endpoint based on user information
-    struct rdma_cm_id *cm_id;
-    ret = rdma_create_ep(&cm_id, *host_res, NULL, init_attr);
+    ret = rdma_create_ep(&(tsc_server_rdma::connid), *host_res, NULL, init_attr);
     if (ret)
-    {
-        fprintf(stderr, "Could not create connection\n");
-        return NULL;
-    }
+        throw std::runtime_error("Could not create connection\n");
+
     printf("Created RDMA connection\n");
 
     // Start listening for incoming connections
-    ret = rdma_listen(cm_id, 0);
+    ret = rdma_listen(tsc_server_rdma::connid, backlog);
     if (ret)
-    {
-        fprintf(stderr, "Failed to listen on RDMA channel.\n");
-        return NULL;
-    }
+        throw std::runtime_error("Failed to listen on RDMA channel.\n");
 
-    printf("Listening on RDMA channel. (%p)\n", (void *) cm_id);
-    return cm_id;
+    printf("Listening on RDMA channel. (%p)\n", (void *) tsc_server_rdma::connid);
 }
+
+void tsc_server_rdma::init_server(const char *host, const char *port, int backlog)
+{
+    tsc_server_rdma::init_server(host, port, NULL, NULL, NULL, 1);
+}
+
+/* ------------------ Client Transport Functions ------------------ */
