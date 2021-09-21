@@ -54,3 +54,5 @@ dkms.conf
 .vscode/
 src/test/
 backups/
+bin/
+build/

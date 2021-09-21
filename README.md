@@ -3,47 +3,51 @@
 </p>
 <h1 align='center'>Telescope</h1>
 
-## What is it?
-Telescope is a high-performance remote desktop streaming solution that uses RDMA-capable hardware for low latency and CPU usage at full quality.  
-It supports RDMA capable Ethernet (RoCE) or InfiniBand (RDMAoIB) networking hardware, as well as software RDMA.
+### What is it?
+Telescope is a high-performance remote desktop streaming solution that uses RDMA-capable hardware for low latency and CPU usage at full quality. It supports RoCE and InfiniBand capable network cards, as well as
+software-based RDMA.
 
-## A brief introduction to RDMA
-Remote Direct Memory Access is a technology that allows machines to directly read 
-and write memory regions of their peers. This allows for a CPU and kernel bypass, allowing
-for zero-copy, zero CPU usage memory copies, allowing large amounts of data to be moved with little
-transmission overhead.
+### A brief introduction to RDMA
+RDMA (Remote Direct Memory Access) is a kernel bypass technology that allows peers
+to directly read and write memory regions of their peers without any CPU involvement.
+This allows for efficient, zero-copy, zero CPU usage data transfers. Internal testing
+shows an approximate 90% CPU usage reduction for this particular use case.
 
-## Why Telescope?
-Telescope's main advantages are
+### Why Telescope?
+Telescope's main advantages are:
 - High data rates with low CPU usage
 - Fully uncompressed streaming with no blocking artifacts
 - Place your host computer anywhere in your local network to manage its heat output
-- Full 24-bit colour for professional-grade work
+- Full 32-bit colour for professional-grade work
 
-If you are looking for a solution to stream your remote desktop session over the Internet, this repository does not aim to solve that issue.
-We recommend checking out [Parsec](https://parsec.app/) or [NoMachine](https://nomachine.com) if this is what you need.
+### What Telescope is not
+Telescope is incredibly bandwidth-intensive and not designed as a solution for streaming
+video over the Internet.  
+Alternatives: [Parsec](https://parsec.app/) or [NoMachine](https://nomachine.com).  
+Telescope is not designed for VM to host communications.  
+Alternatives: [Looking Glass](https://github.com/gnif/LookingGlass/).
 
-## Hardware Requirements
+### Supported Configurations
+The test version of Telescope supports Linux X11 clients/hosts.
 
-### Bandwidth
-Telescope stream resolution is determined by your monitor resolution and refresh rate of your X display.
-By default, it streams at 24bpp without any chroma subsampling - For a 1080p/60Hz video stream, you will require approximately 3.1 Gbps of available network throughput.  
-To calculate your bandwidth requirement, the formula is:  
-`BW (Mbps) = <width> * <height> * <bit depth> * <framerate> / 1048576`.
+### System Requirements
+Please see the [System Requirements](https://github.com/beanfacts/telescope/wiki/System-Requirements) section of the wiki.
 
-## Test environment
-- OS: Pop!\_OS 20.10, Debian 10.0, Ubuntu 18.04
-- NIC: Mellanox ConnectX-3 10GbE NIC w/ RDMA
+### Test environment
+Telescope is built and tested on Fedora 34 and Ubuntu 21.04, with Mellanox ConnectX-3 NICs.  
+Operating systems and hardware older/newer than these are likely to be supported, but they
+have not been tested.
 
-## Installing Telescope
-
+### Installing Telescope
 Please refer to the [wiki](https://github.com/beanfacts/telescope/wiki/Installing-Telescope) for setup instructions.
 
-## Copyright
+### Copyright
 &copy; 2021 Telescope Project Developers  
-(Tim Dettmar, Vorachat Somsuay, Jirapong Pansak, Tairo Kageyama, Kittidech Ditsuwan)  
-This repository is licensed under the GNU Affero General Public License, Version 3
-with the distribution terms specified in the license.
+Tim Dettmar, Vorachat Somsuay, Jirapong Pansak, Tairo Kageyama, Kittidech Ditsuwan  
+The license for this repository is AGPLv3- please see the LICENSE file for details.  
+Exceptions may apply for specific first- and third-party libraries incorporated verbatim into this repository, which are copyrighted by the original author. 
 
-## License Notices
-RDMA baseline test code is based on the documentation and tutorials provided by Mellanox and Tarick Bedeir, licensed under the MIT license.
+### License Notices
+This project would not be possible without the use of great third-party libraries and code examples.  
+We use several libraries to speed up Telescope development, and the list is continuously changing.  
+For the most recent information, please refer to the [wiki section](https://github.com/beanfacts/telescope/wiki/Third-Party-Libraries).

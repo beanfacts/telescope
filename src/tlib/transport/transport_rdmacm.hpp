@@ -21,9 +21,12 @@ public:
 
     void init_server(const char *host, const char *port,
             struct rdma_addrinfo *hints, struct rdma_addrinfo **host_res,
-            struct ibv_qp_init_attr *init_attr, int backlog );
+            struct ibv_qp_init_attr *init_attr,
+            int backlog );
 
     void init_server(const char *host, const char *port, int backlog);
+
+    struct rdma_cm_id *accept();
 
 private:
 
@@ -38,5 +41,9 @@ class tsc_client_rdma : public tsc_client_base {
 public:
 
     void connect(const char *host, const char *port);
+
+private:
+
+    struct rdma_cm_id *connid;
 
 };

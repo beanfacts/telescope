@@ -1,9 +1,11 @@
 #include "ui.hpp"
 
+
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
+
 
 void tsc_client_ui::init(int width, int height)
 {
@@ -13,26 +15,31 @@ void tsc_client_ui::init(int width, int height)
     init_fonts();
 }
 
-void tsc_client_ui::loop()
+
+int tsc_client_ui::wait_request()
 {
-    int x = 0;
-    while (!x)
+    while (ui_data.state == _tsc_SETUP)
     {
-        x = tsc_client_ui::refresh();
+        if (glfwWindowShouldClose(window)) return -1;
+        refresh();
+        if (ui_data.state == _tsc_CONNREQ)
+        {
+            return 0;
+        }
     }
-    printf("Cleaning up...\n");
-    cleanup();
+    return 1;
 }
 
 
 void tsc_client_ui::set_default_values(int width, int height)
 {
-    ui_data.address_str = (char *) calloc(1, host_max_len);
-    ui_data.state = _tsc_SETUP;
-    ui_data.port = 9999;
-    ui_data.fps = 60;
-    ui_data.res_x = width;
-    ui_data.res_y = height;
+    ui_data.host_str    = (char *) calloc(1, host_max_len);
+    ui_data.port_str    = (char *) calloc(1, port_max_len);
+    ui_data.ifname_str  = (char *) calloc(1, ifname_max_len);
+    ui_data.state       = _tsc_SETUP;
+    ui_data.fps         = 60;
+    ui_data.res_x       = width;
+    ui_data.res_y       = height;
 }
 
 void tsc_client_ui::init_window(int width, int height)
@@ -72,10 +79,12 @@ void tsc_client_ui::init_imgui()
     ImGui_ImplOpenGL3_Init(glsl_version);
 }
 
+
 void tsc_client_ui::init_fonts()
 {
     //io.Fonts->AddFontFromFileTTF("InterVariable.ttf", 14);
 }
+
 
 void tsc_client_ui::refresh_ui()
 {
@@ -95,7 +104,12 @@ void tsc_client_ui::refresh_ui()
         
         if (ImGui::TreeNode("Connection"))
         {
-            ImGui::InputTextWithHint("##host", "127.0.0.1:9999", ui_data.address_str, host_max_len);
+            ImGui::InputTextWithHint("RDMA Interface", "ib0_mlx5",
+                    ui_data.ifname_str, ifname_max_len);
+            ImGui::InputTextWithHint("Hostname", "192.168.1.123",
+                    ui_data.host_str, host_max_len);
+            ImGui::InputTextWithHint("Port", "9999", 
+                    ui_data.port_str, port_max_len);
             ImGui::TreePop();
         }
 
@@ -104,7 +118,6 @@ void tsc_client_ui::refresh_ui()
             ImGui::InputInt("X", &ui_data.res_x, 0);
             ImGui::InputInt("Y", &ui_data.res_y, 0);
             ImGui::InputInt("FPS", &ui_data.fps, 0);
-            
             ImGui::TreePop();
         }
         
@@ -121,6 +134,11 @@ void tsc_client_ui::refresh_ui()
                 (double) ui_data.res_x * (double) ui_data.res_y 
                 * (double) ui_data.fps * 32 / (double) (1 << 30));
 
+        if (ui_data.state == _tsc_CONNREQ)
+        {
+            ImGui::Text("Connecting...");
+        }
+
         ImGui::End();
     }
     
@@ -134,6 +152,7 @@ void tsc_client_ui::refresh_ui()
     glfwSwapBuffers(window);
 }
 
+
 int tsc_client_ui::refresh()
 {
     int out = glfwWindowShouldClose(window);
@@ -145,6 +164,7 @@ int tsc_client_ui::refresh()
     return out;
 }
 
+
 void tsc_client_ui::cleanup()
 {
     ImGui_ImplOpenGL3_Shutdown();
@@ -152,4 +172,19 @@ void tsc_client_ui::cleanup()
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+void tsc_client_ui::lock_cursor()
+{
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    if (!glfwRawMouseMotionSupported())
+        throw std::runtime_error("Raw mouse motion unsupported.");
+    
+    glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+}
+
+void tsc_client_ui::unlock_cursor()
+{
+    glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }

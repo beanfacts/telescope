@@ -18,7 +18,7 @@ public:
 
     void init_server(const char *host, const char *port, int backlog);
     
-    int init_server(struct sockaddr_in *sa, int backlog);
+    void init_server(struct sockaddr_in *sa, int backlog);
     
     int get_server(struct sockaddr_in *sa, int backlog);
 
@@ -41,5 +41,7 @@ public:
     int is_ready();
 
     void connect(const char *host, const char *port);
-    
-}
+
+    int sockfd;
+
+};

@@ -44,3 +44,23 @@ void tsc_common_base::set_sockaddr(const char *address_str, const char *port, in
     out_addr->sin_addr      = raw_addr;
     out_addr->sin_port      = htons(_port);
 }
+
+
+/* ---- Protobuf handling functions ---- */
+
+char *tsc_common_base::pack_msg(pb_wrapper *msg)
+{
+    // We do not have messages larger than 2GB. But we check it
+    // anyway in case the message data is malformed
+    long lbufsize = msg->ByteSizeLong();
+    uint32_t maxbufsize = -1;
+    if (lbufsize >= maxbufsize) std::runtime_error("boot too big");
+    static_assert(sizeof(uint32_t) == 4);
+    uint32_t bufsize = (uint32_t) lbufsize;
+    // Pack message size into message contents
+    char *buf = (char *) malloc(bufsize + 4);
+    bool status = msg->SerializeToArray(buf + 4, bufsize);
+    if (!status) throw std::runtime_error("Serialize failed.");
+    * (uint32_t *) buf = htonl(bufsize);
+    return buf;
+}

@@ -6,43 +6,95 @@
 
 syntax = "proto3";
 
+/*  Wraps all the possible types of protobuf messages that can be sent over 
+    the wire. */
+message pb_wrapper {
+    oneof wrapped_msg {
+        pb_hello        pb_whello       = 1;
+        pb_hello_reply  pb_whello_reply = 2;
+        pb_mr_wrapper   pb_wmr_wrapper  = 3;
+    }
+}
+
+/*  Hello message. Client first sends this message to inform the server about
+    which formats it can accept and what transports it can use. */
 message pb_hello {
 
     /* Supported transport type flag */
-    repeated pb_screen transports   = 1;
+    repeated pb_transport transports    = 1;
 
     /* Native screen resolution & fps */
-    repeated pb_transport screens   = 2;
+    repeated pb_screen screens          = 2;
 
     /* List of acceptable screen resolutions */
-    repeated pb_accept accept       = 3;
+    repeated pb_accept accept           = 3;
 }
 
+/*  Reply to client hello message. Server sends this message back to let the
+    client know which session identifier to use for subsequent connections. 
+    The server also indicates the transport type it is using and, out of the
+    parameter list, which screens the server will be sending to the client.
+    Subsequent messages should be sent through the new connection type. */
+message pb_hello_reply {
+
+    uint64 cookie               = 1;
+    pb_transport transport      = 2;
+    repeated pb_screen screens  = 3;
+
+}
+
+/*  Pixel map formats. */
 enum pb_pixmap {
-    z_bgr_888                       = 0;
-    z_bgra_888                      = 1;
-    z_rgb_888                       = 2;
-    z_rgba_8888                     = 3;
+    z_bgr_888           = 0;
+    z_bgra_888          = 1;
+    z_rgb_888           = 2;
+    z_rgba_8888         = 3;
 }
 
+/* Monitor information */
 message pb_screen {
-    uint32 index                    = 1;
-    uint32 res_x                    = 2;
-    uint32 res_y                    = 3;
-    pb_pixmap pixmap                = 4;
-    uint32 hz                       = 5;
+    uint32 index        = 1;
+    uint32 res_x        = 2;
+    uint32 res_y        = 3;
+    pb_pixmap pixmap    = 4;
+    uint32 hz           = 5;
 }
 
+/* Acceptable resolution info */
 message pb_accept {
-    uint32 index                    = 1;
-    uint32 res_x                    = 2;
-    uint32 res_y                    = 3;
-    pb_pixmap pixmap                = 4;
+    uint32 index        = 1;
+    uint32 res_x        = 2;
+    uint32 res_y        = 3;
+    pb_pixmap pixmap    = 4;
 }
 
+/* Available transport info */
 message pb_transport {
-    uint64 flag                     = 1;
-    uint64 max_bw                   = 2;
-    string ip_addr                  = 3;
-    uint32 netmask                  = 4;
+    uint64 flag         = 1;
+    uint64 max_bw       = 2;
+    string ip_addr      = 3;
+    string port         = 4;
+    uint32 netmask      = 5;
+}
+
+/* MR data specific to InfiniBand Verbs / RDMACM */
+message pb_ibv_mr {
+    uint64 addr         = 1;
+    uint64 length       = 2;
+    uint32 rkey         = 3;
+    uint64 access_flags = 4;
+}
+
+/*  Message which contains data required to perform RDMA transfers. */
+message pb_mr {
+    uint32 screen_index         = 1;    /* Which monitor this MR is for. */
+    uint32 buffer_index         = 2;    /* The index of the buffer for this specific monitor. */
+    oneof mr_data {
+        pb_ibv_mr ibv_mr        = 3;
+    }
+}
+
+/* Wrapper to allow for repeated oneof */
+message pb_mr_wrapper {
+    repeated pb_mr mr           = 1;
 }
