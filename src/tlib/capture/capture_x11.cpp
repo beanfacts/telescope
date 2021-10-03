@@ -62,11 +62,14 @@ void tsc_capture_x11::init()
     */
 
 struct std::vector<tsc_display> tsc_capture_x11::get_displays()
-{
+{   
+    int nscreen = XScreenCount(display) + 1;
+    std::cout << "You Have " << nscreen << " screen(s) available\n";
+    std::cout << "select using 0 to available - 1 \n";
     XRRScreenResources *screen;
     XRRCrtcInfo *crtc_info;
     screen = XRRGetScreenResources (display, root);
-    std::cout << screen->modes->hSkew<< "\n";
+    // std::cout << screen->modes->hSkew<< "\n";
     // Time	timestamp;
     // Time	configTimestamp;
     // int		ncrtc; shows up as 4
@@ -89,7 +92,7 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
     // char		*name;
     // unsigned int	nameLength;
     // XRRModeFlags	modeFlags;
-    for (int i=0; i < 2; i++){
+    for (int i=0; i < nscreen; i++){
         tsc_display display_info;
         crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[i]);
         display_info = {
@@ -112,8 +115,8 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 struct tsc_frame_buffer *tsc_capture_x11::alloc_frame(int index)
 {   tsc_frame_buffer *buf = new tsc_frame_buffer;
     shmimage *temp;
-    std::cout << offset_vec[index].x_offset << "\n";
-    std::cout << offset_vec[index].y_offset << "\n";
+    // std::cout << offset_vec[index].x_offset << "\n";
+    // std::cout << offset_vec[index].y_offset << "\n";
     temp = tsc_capture_x11::init_x11(display,display_info_vec[index].width,display_info_vec[index].height,offset_vec[index].x_offset,offset_vec[index].y_offset);
     buf->display = display_info_vec[index];
     // figure out how to deal with this later
