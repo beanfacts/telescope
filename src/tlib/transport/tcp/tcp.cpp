@@ -4,7 +4,7 @@
     Copyright (c) 2021 Telescope Project
 */
 
-#include "transport_tcp.hpp"
+#include "transport/tcp/tcp.hpp"
 #include <stdexcept>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -13,8 +13,67 @@
 
 /* ------------------ Common Transport Functions ------------------ */
 
+static void comp_receive(void *buf, int fd, ssize_t bytes)
+{
+    ssize_t recvd;
+    ssize_t total = 0;
+    while (bytes > 0)
+    {
+        recvd = recv(fd, (char *) buf + total, bytes, 0);
+        if (recvd <= 0)
+        {
+            throw std::runtime_error("Receive failed.");
+        }
+        else
+        {
+            bytes -= recvd;
+            total += recvd;
+        }
+    }
+}
+
+static void comp_send(void *buf, int fd, ssize_t bytes)
+{
+    ssize_t sent;
+    ssize_t total = 0;
+    while (bytes > 0)
+    {
+        sent = send(fd, (char *) buf + total, bytes, 0);
+        if (sent <= 0)
+        {
+            throw std::runtime_error("Send failed.");
+        }
+        else
+        {
+            bytes -= sent;
+            total += sent;
+        }
+    }
+}
+
+tsc_communicator_tcp::tsc_communicator_tcp(int _fd)
+{
+    connfd = _fd;
+}
+
+inline int tsc_communicator_tcp::get_transport_type()
+{
+    return TSC_TRANSPORT_TCP;
+}
+
+void tsc_communicator_tcp::send_msg(char *buf, size_t length)
+{
+    comp_send(buf, connfd, length);
+}
+
+ssize_t tsc_communicator_tcp::recv_msg(char *buf, size_t length)
+{
+    comp_receive(buf, connfd, length);
+}
+
 /* ------------------ Server Transport Functions ------------------ */
 
+/*
 int tsc_server_tcp::is_ready()
 {
     return (tsc_server_tcp::sockfd > 0);
@@ -76,8 +135,11 @@ int tsc_server_tcp::accept()
     return fd;
 }
 
+*/
+
 /* ------------------ Client Transport Functions ------------------ */
 
+/*
 void tsc_client_tcp::connect(const char *host, const char *port)
 {
     int ret;
@@ -111,3 +173,4 @@ void tsc_client_tcp::connect(const char *host, const char *port)
     tsc_client_tcp::sockfd = sfd;
 
 }
+*/

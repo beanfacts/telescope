@@ -4,13 +4,32 @@
     Copyright (c) 2021 Telescope Project
 */
 
-#include "transport_base.hpp"
-
+#include "transport/base.hpp"
 /* ------------------ Common Transport Functions ------------------ */
+
+/*  Communicator implementation for TCP. */
+class tsc_communicator_tcp : public tsc_communicator {
+
+public:
+
+    tsc_communicator_tcp(int _fd);
+
+    /*  Communicator API functions */
+    inline int get_transport_type();
+    void send_msg(char *buf, size_t length);
+    ssize_t recv_msg(char *buf, size_t max_len);
+
+private:
+
+    int connfd;
+
+};
 
 /* ------------------ Server Transport Functions ------------------ */
 
-class tsc_server_tcp : public tsc_server_base {
+
+/*
+class tsc_server_tcp : public tsc_server {
 
 public:
 
@@ -31,17 +50,6 @@ private:
     int sockfd = -1;
 
 };
+*/
 
 /* ------------------ Client Transport Functions ------------------ */
-
-class tsc_client_tcp : public tsc_client_base {
-
-public:
-
-    int is_ready();
-
-    void connect(const char *host, const char *port);
-
-    int sockfd;
-
-};

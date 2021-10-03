@@ -1,8 +1,8 @@
 #pragma once
 
-#include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
+#include "ui/imgui/imgui.h"
+#include "ui/imgui/backends/imgui_impl_glfw.h"
+#include "ui/imgui/backends/imgui_impl_opengl3.h"
 
 #include <stdio.h>
 #include <stdexcept>

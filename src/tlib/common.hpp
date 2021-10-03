@@ -7,35 +7,24 @@
 #ifndef TSC_COMMON_H
 #define TSC_COMMON_H
 
-#define TELESCOPE_VERSION "0.2"
+/*  Telescope version string.
+    - For point releases, use SemVer
+    - For commits, use time/date (UTC) */
+#define TELESCOPE_VERSION "2021.10.03-15.32"
 
 #include <stdio.h>
 #include <cstdlib>
 #include <unistd.h>
 #include <cstdint>
 
-/* Screen Capture Libraries */
-#include <X11/Xlib.h>               // Base X11 library
-#include <X11/extensions/XShm.h>    // Shared memory extensions
-#include <X11/extensions/Xrandr.h>  // Get FPS
-
-#include "errors.hpp"
-
-
+/*  Telescope capture types. */
 typedef enum {
-    TSC_CAPTURE_NONE        = 0,
     TSC_CAPTURE_X11         = 1,
-    TSC_CAPTURE_PW          = 2,
-    TSC_CAPTURE_NVFBC       = 3,
-    TSC_CAPTURE_AMF         = 4,
-    TSC_CAPTURE_LGSHM       = 5
+    TSC_CAPTURE_PW          = (1 << 1),
+    TSC_CAPTURE_NVFBC       = (1 << 2),
+    TSC_CAPTURE_AMF         = (1 << 3),
+    TSC_CAPTURE_LGSHM       = (1 << 4)
 } tsc_capture_type;
-
-/* Helper macros for common operations */
-
-#define _tsc_clear(x) memset(&x, 0, sizeof(x))                      // Clear fields of an existing variable
-#define _tsc_calloc(type, x) type *x = calloc(1, sizeof(type))      // Create a new zeroed item (on heap)
-#define _tsc_println(x) printf(x "\n");                             // Print with new line...
 
 /* Print a string as a series of hex bytes */
 
@@ -47,47 +36,5 @@ static inline void printb(char *buff, int n)
     }
     printf("\n");
 }
-
-/* Screen Capture Metadata */
-
-typedef struct {
-    tsc_capture_type capture_type;      // Screen capture provider (X11 etc.)
-    uint32_t    width;                  // Native width
-    uint32_t    height;                 // Native height
-    uint32_t    fps;                    // Native framerate
-    uint16_t    bpp;                    // Screen bits per pixel
-    uint16_t    format;                 // Screen pixel format
-    union
-    {
-        struct {
-            Display     *x_display;     // X11 display pointer
-            Window      x_window;       // Window to capture
-            int         x_screen_no;    // X Screen number (not the monitor!)
-            int         x_offset_x;     // Screen offset (x-axis)
-            int         x_offset_y;     // Screen offset (y-axis)
-        };
-    };
-} tsc_screen;
-
-// Get the page-aligned size for a single frame
-inline int tsc_memalign_frame(int width, int height, int bpp)
-{
-    int ps = getpagesize();
-    int raw_fsize = (width * height * (bpp / 8));
-    return raw_fsize + (ps - (raw_fsize % ps));
-}
-
-/* Linked list containing information about every buffer
-typedef struct {
-    union {
-        struct {
-            XShmSegmentInfo     shminfo;        // Shared memory segment info
-            uint32_t            bufid;          // Item number in buffer
-            XImage              *ximage;        // X Image containing metadata
-        };
-    };
-    T_ImageList *next;  // Next item in buffer
-} T_ImageList;
-*/
 
 #endif

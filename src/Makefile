@@ -25,8 +25,11 @@ CSTD = -std=c++17
 CLI_FLAGS = -Itlib/ui -Itlib/ui/imgui
 
 all:
-	make server
-	make client
+	$(MAKE) pb
+	$(MAKE) server
+	$(MAKE) client
+pb:
+	protoc tlib/transport/transport.proto --cpp_out=.
 server:
 	$(CXX) $(CFLAGS) $(COMMON_SRC) $(SRV_SRC) $(SRV_LIBS) $(COMMON_LIBS) server/server.cpp -o ../bin/server $(CSTD)
 client:

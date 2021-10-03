@@ -1,153 +1,77 @@
-/*
-    SPDX-License-Identifier: AGPL-3.0-or-later
-    Telescope Transport Library
-    Copyright (c) 2021 Telescope Project
-*/
+#include <sys/types.h>
+#include "transport/base.hpp"
+#include "protobuf/transport.pb.h"
 
-#ifndef T_TRANSPORT_H
-#define T_TRANSPORT_H
+/*  ---------------------- Telescope Protobuf Library ---------------------- */
 
-#include <iostream>
-#include <vector>
-#include <rdma/rdma_cma.h>
-#include <rdma/rdma_verbs.h>
+namespace tsc_pb {
 
-#include "transport_rdmacm.hpp"
-#include "transport_tcp.hpp"
-#include "transport_base.hpp"
-
-/* ------------------ Common Transport Functions ------------------ */
-
-/* ------------------ Server Transport Functions ------------------ */
-
-
-#define TSC_MT_CLIENT_HELLO         1
-#define TSC_MT_CLIENT_HELLO_REPLY   1 << 1
-
-typedef struct {
-    int     size;
-    char    *buf;
-} tsc_mbuf;
-
-
-/* Receive delimited message. */
-tsc_mbuf tsc_recv_msg(int fd);
-
-/* Send delimited message. */
-void tsc_send_msg(char *buf, int fd);
-
-/* Server-side representation of a client. */
-class tsc_client_repr {
-
-public:
-
-    /* Attach the file descriptor of the client's control channel */
-    void attach_init_fd(int __fd)
-    {
-        init_fd = __fd;
-    }
-
-    /* Attach RDMACM ID of the client. */
-    void attach_cm_id(struct rdma_cm_id *__cm_id)
-    {
-        cm_id = __cm_id;
-        transport_type = TSC_TRANSPORT_RDMACM;
-    }
-
-    /* Get client control channel fd. */
-    int get_init_fd()
-    {
-        return init_fd;
-    }
-
-    /* Get client RDMACM ID. */
-    rdma_cm_id *get_cm_id()
-    {
-        return cm_id;
-    }
-
-    tsc_mbuf recv_msg()
-    {
-        return tsc_recv_msg(init_fd);
-    }
-
-    void send_msg(char *buf)
-    {
-        tsc_send_msg(buf, init_fd);
-    }
-
-    /* Advance to the next frame. */
-    void advance_frame();
-
-private:
-
-    tsc_transport_type              transport_type;
-    std::vector<struct ibv_mr *>    client_mrs;
+    /*  Pack a message from protobuf format into an existing buffer.
+        This message includes the 4-byte delimiter.
+        msg:        Protobuf message wrapper.
+        buf:        Pointer to allocated buffer.
+        max_len:    Buffer length.
+        Returns:    Message length. */
+    ssize_t pack_msg(pb_wrapper *msg, char *buf, size_t max_len);
     
-    struct rdma_cm_id   *cm_id  =  0;
-    int                 init_fd = -1;
-    int                 conn_fd = -1;
+    /*  Unpack a wrapped protobuf message. 
+        buf:        Pointer to message buffer, including 4-byte delimiter.
+        len:        Maximum number of bytes to unpack.
+        Returns:    Protobuf message wrapper class. */
+    pb_wrapper unpack_msg(char *buf, size_t max_len);
 
 };
 
-/* Struct to hold supported classes used by the Telescope server */
-struct tsc_server_data {
-    tsc_server_tcp              meta_server;    // TCP server   (initialization / data exchange phase)
-    tsc_server_tcp              tcp_server;     // TCP server   (screen capture phase)
-    tsc_server_rdma             rdma_server;    // RDMA server  (screen capture phase)          
+/*  ---------------------- Telescope Client/Server API ---------------------- */
+
+/*  Connection class.
+    This class can be used both by the client and server to exchange messages. */
+class tsc_conn {
+    
+public:
+
+    /*  Callback executed on new connection. */
+    void connect_cb(tsc_communicator_nb *new_conn)
+    {
+        pthread_mutex_lock(&pending_lock);
+        pending_conn.insert(pending_conn.end(), new_conn);
+        pthread_mutex_unlock(&pending_lock);
+    }
+
+    tsc_communicator    *ctrl_ch        = nullptr;
+    tsc_communicator_nb *data_ch        = nullptr;
+
+    /*  Pending connection vector. */
+    std::vector<tsc_communicator_nb *>  pending_conn;
+    pthread_mutex_t                     pending_lock;
+
 };
 
 /*  Server class.
-    Stores all the active transport types as well as
-    all the client representations in a single object. */
-class tsc_server : public tsc_server_base {
+    The sole purpose of the server class is to wait and accept clients. Once a
+    client has been accepted, resources associated with that client should be
+    migrated to a tsc_client class. */
+class tsc_server {
 
 public:
+
+    /*  Establish a control channel on host:port with protocol family 'type'.
+        Currently supported:
+        - Sockets + SOCK_STREAM => TCP */
+    void start_cc(const char *host, const char *port, int type);
     
-    void init_servers(struct tsc_transport *init_transport,
-        struct tsc_transport *transports, int max_clients);
+    /*  Establish a data channel on host:port with protocol family 'type'.
+        Currently supported:
+        - RDMA_CM + SOCK_STREAM => IBV_QPT_RC; RDMA_PS_TCP 
+        Note that IBV_QPT_RC behaves like SOCK_SEQPACKET, not SOCK_STREAM. */
+    void start_dc(const char *host, const char *port, int type);
 
+    /*  Accept a client on the control channel.
+        Returns a connection class that can be used for further communication. */
+    tsc_conn accept();
 
-    /* Wait for a client on the control channel. */
-    tsc_client_repr get_client();
-
-    /* Wait for a client on one of the data channels. */
-    void add_client_channel(tsc_client_repr *client, int transport_flag);
-
-private:
-
-    struct tsc_server_data server;
-    std::vector<tsc_client_repr> clients;
-
+    /*  Accept a client on the data channel, and add it to the connection
+        class. 
+        conn:   Connection identifier. The */
+    void accept_dc(tsc_conn *conn, int type);
 };
-
-/* ------------------ Client Transport Functions ------------------ */
-
-struct tsc_client_data {
-    tsc_client_tcp              meta_server;
-    tsc_client_tcp              tcp_server;
-    tsc_client_rdma             rdma_server;
-};
-
-/*  Client class.
-    Stores all the active transport types as well as
-    all the client representations in a single object. */
-class tsc_client : public tsc_client_base {
-
-public:
-
-    void init_transport(struct tsc_transport *transport);
-
-    void init_control_channel(const char *host, const char *port);
-
-    tsc_mbuf recv_msg();
-
-    void send_msg(char *buf);
-
-private:
-
-    struct tsc_client_data client;
-
-};
-
-#endif

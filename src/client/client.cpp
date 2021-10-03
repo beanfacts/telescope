@@ -79,7 +79,9 @@ int main(int argc, char **argv)
 
     // Establish connection.
     client.init_transport(&data_channel);
-    std::cout << "Connected\n";
-
+    
+    // Only RDMA transports are currently supported, which require memory
+    // registration. Do it here
+    client.alloc_frame_memory()
 
 }
