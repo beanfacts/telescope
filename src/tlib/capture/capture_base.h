@@ -43,7 +43,7 @@ class tsc_capture{
     virtual struct std::vector<tsc_display> get_displays() = 0;
 
 /*  Free the list of displays returned by get_displays() */
-    virtual void free_displays(struct tsc_display *) = 0;
+    virtual void free_displays(struct tsc_display *display) = 0;
 
 /*  Allocate memory to store one frame for a specific display */
     virtual struct tsc_frame_buffer *alloc_frame(int index) = 0;

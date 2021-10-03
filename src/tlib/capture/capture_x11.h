@@ -11,6 +11,11 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/XShm.h>
 
+struct tsc_offset{
+    int x_offset;
+    int y_offset;
+};
+
 class tsc_capture_x11 : public tsc_capture {
     private:
         struct shmimage
@@ -26,7 +31,7 @@ class tsc_capture_x11 : public tsc_capture {
         Window root;
         std::vector<tsc_display> display_info_vec;
         std::vector<tsc_frame_buffer> frame_buffer_vec;
-        
+        std::vector<tsc_offset> offset_vec;
         // private class methods 
         static void initimage( struct shmimage * image );
         static void destroyimage( Display * dsp, struct shmimage * image );
@@ -47,9 +52,7 @@ class tsc_capture_x11 : public tsc_capture {
             struct tsc_frame_buffer *alloc_frame(int index);
 
             void update_frame(struct tsc_frame_buffer *frame_buffer);
-            void free_displays(struct tsc_display *);
+            void free_displays(struct tsc_display *display);
             void free_frame(struct tsc_frame_buffer *frame_buffer);
-            // temporary get frame for testing
-            const void *get_frame_p(struct tsc_frame_buffer *frame);
 };
 #endif //TELESCOPE_CAPTURE_X11_H
