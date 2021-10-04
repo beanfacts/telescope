@@ -20,6 +20,7 @@ void tsc_capture_x11::init()
 {
     // Initialise X11
     XInitThreads();
+    // define the global display variable
     display = XOpenDisplay(nullptr);
     root = XDefaultRootWindow( display );
     if(display == nullptr) {
@@ -29,16 +30,17 @@ void tsc_capture_x11::init()
 
 struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 {
-    // nscreens is the screen counter
-    int nscreen = 0;
+    // n_screens is the screen counter
+    int n_screen = 0;
     XRRScreenResources *screen;
     XRRCrtcInfo *crtc_info;
     screen = XRRGetScreenResources (display, root);
     while (true){
+        // get the offset width height and other stuff
         tsc_display display_info;
-        crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[nscreen]);
+        crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[n_screen]);
         display_info = {
-        .index = nscreen,
+        .index = n_screen,
         .width = (int) crtc_info->width,
         .height = (int) crtc_info->height,
         .fps = 60
@@ -48,13 +50,15 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
         offset.y_offset = crtc_info->y;
         offset_vec.push_back(offset);
         display_info_vec.push_back(display_info);
+        //if it is a valid display
+        // the crtc_ifo->width will be > 0
         if (crtc_info->width == 0){
             break;
         }
-        nscreen++;
+        n_screen++;
     }
-    std::cout << "You Have " << nscreen << " screen(s) available\n";
-    std::cout << "select using 0 to " << nscreen - 1 << "\n";
+    std::cout << "You Have " << n_screen << " screen(s) available\n";
+    std::cout << "select using 0 to " << n_screen - 1 << "\n";
     return display_info_vec;
     
 }

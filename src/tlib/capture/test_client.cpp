@@ -125,7 +125,6 @@ int main(int argc, char *argv[]) {
         tsc_capture_x11 cap;
         cap.init();
         std::vector<tsc_display> screens = cap.get_displays();
-        // std::cout << screens << "\n";
         tsc_frame_buffer *buf = cap.alloc_frame(dsp);
         tsc_frame_buffer *buf2 = cap.alloc_frame(1);
         glfwSetKeyCallback(win, key_callback);
