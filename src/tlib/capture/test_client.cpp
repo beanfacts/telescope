@@ -29,6 +29,7 @@ GLuint			texture_id;
 int             width;
 int             height;
 float aspect_ratio;
+bool switcher;
 
 void reshapeScene(GLint width, GLint height)
 {
@@ -64,6 +65,11 @@ void Redraw() {
     glfwSwapBuffers(win);
 }
 
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_E && action == GLFW_PRESS)
+        switcher= ! switcher;
+}
 
 /*                */
 /*  MAIN PROGRAM  */
@@ -122,10 +128,17 @@ int main(int argc, char *argv[]) {
         // std::cout << screens << "\n";
         tsc_frame_buffer *buf = cap.alloc_frame(dsp);
         tsc_frame_buffer *buf2 = cap.alloc_frame(1);
+        glfwSetKeyCallback(win, key_callback);
         while (!glfwWindowShouldClose(win)) {
             // render and call the xshmget
-            cap.update_frame(buf);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screens[dsp].width, screens[dsp].height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf->buffer);
+            if (switcher){
+                cap.update_frame(buf);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screens[dsp].width, screens[dsp].height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf->buffer);
+            }else{
+                cap.update_frame(buf2);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screens[dsp].width, screens[dsp].height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf2->buffer);
+            }
+
             Redraw();
             glfwPollEvents();
 
