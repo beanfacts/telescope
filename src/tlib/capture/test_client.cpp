@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
         std::vector<tsc_display> screens = cap.get_displays();
         // std::cout << screens << "\n";
         tsc_frame_buffer *buf = cap.alloc_frame(dsp);
-
+        tsc_frame_buffer *buf2 = cap.alloc_frame(1);
         while (!glfwWindowShouldClose(win)) {
             // render and call the xshmget
             cap.update_frame(buf);

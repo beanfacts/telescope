@@ -26,8 +26,7 @@ class tsc_capture_x11 : public tsc_capture {
         } ;
         // class storage variables
         Display *display;
-        
-        int x_offset{}, y_offset{};
+
         Window root;
         std::vector<tsc_display> display_info_vec;
         std::vector<tsc_frame_buffer> frame_buffer_vec;
@@ -37,8 +36,8 @@ class tsc_capture_x11 : public tsc_capture {
         static void destroyimage( Display * dsp, struct shmimage * image );
         static int init_xshm(Display * dsp, struct shmimage * image , int width, int height);
 
-        shmimage *init_x11(Display *dsp, int dsp_width, int dsp_height,int x_offset,int y_offset);
-        const void *get_frame(shmimage *src);
+        shmimage *init_x11(Display *dsp, int dsp_width, int dsp_height);
+        const void *get_frame(shmimage *src,int x_offset,int y_offset);
 
     public:
             void init();

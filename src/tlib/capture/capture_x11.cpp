@@ -23,12 +23,13 @@ void tsc_capture_x11::init()
     display = XOpenDisplay(nullptr);
     root = XDefaultRootWindow( display );
     if(display == nullptr) {
-        std::cout << "cannot open display\n";
+        std::cout << "Error: Failed to open display\n";
         exit(0); }
 }
 
 struct std::vector<tsc_display> tsc_capture_x11::get_displays()
-{   
+{
+    // nscreens is the screen counter
     int nscreen = 0;
     XRRScreenResources *screen;
     XRRCrtcInfo *crtc_info;
@@ -61,7 +62,7 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 struct tsc_frame_buffer *tsc_capture_x11::alloc_frame(int index)
 {   tsc_frame_buffer *buf = new tsc_frame_buffer;
     shmimage *temp;
-    temp = tsc_capture_x11::init_x11(display,display_info_vec[index].width,display_info_vec[index].height,offset_vec[index].x_offset,offset_vec[index].y_offset);
+    temp = tsc_capture_x11::init_x11(display,display_info_vec[index].width,display_info_vec[index].height);
     buf->display = display_info_vec[index];
     // figure out how to deal with this later
     buf->buffer_id = 0;
@@ -75,7 +76,8 @@ struct tsc_frame_buffer *tsc_capture_x11::alloc_frame(int index)
 }
 
 void tsc_capture_x11::update_frame(struct tsc_frame_buffer *frame_buffer){
-    get_frame((shmimage *) frame_buffer->context);
+    int display_index = frame_buffer->display.index;
+    get_frame((shmimage *) frame_buffer->context,offset_vec[display_index].x_offset,offset_vec[display_index].y_offset);
 }
 
 void tsc_capture_x11::initimage( struct shmimage * image )
@@ -144,9 +146,7 @@ int tsc_capture_x11::init_xshm(Display * dsp, struct shmimage * image , int widt
 
 }
 
-tsc_capture_x11::shmimage *tsc_capture_x11::init_x11(Display *dsp, int dsp_width, int dsp_height,int xoffset,int yoffset){
-    x_offset = xoffset;
-    y_offset = yoffset;
+tsc_capture_x11::shmimage *tsc_capture_x11::init_x11(Display *dsp, int dsp_width, int dsp_height){
     shmimage *src = new shmimage;
 
     // initalise the xshm image
@@ -160,8 +160,8 @@ tsc_capture_x11::shmimage *tsc_capture_x11::init_x11(Display *dsp, int dsp_width
     return src;
 }
 
-const void *tsc_capture_x11::get_frame(shmimage *src)
-    {   
+const void *tsc_capture_x11::get_frame(shmimage *src,int x_offset,int y_offset)
+    {
         XShmGetImage( display, XDefaultRootWindow( display ), src->ximage, x_offset, y_offset, AllPlanes ) ;
         return reinterpret_cast<void *>(src->ximage->data);
     }
