@@ -29,28 +29,31 @@ void tsc_capture_x11::init()
 
 struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 {   
-    int nscreen = XScreenCount(display);
-    std::cout << "You Have " << nscreen << " screen(s) available\n";
-    std::cout << "select using 0 to " << nscreen - 1 << "\n";
+    int nscreen = 0;
     XRRScreenResources *screen;
     XRRCrtcInfo *crtc_info;
     screen = XRRGetScreenResources (display, root);
-    for (int i=0; i < 2; i++){
+    while (true){
         tsc_display display_info;
-        crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[i]);
+        crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[nscreen]);
         display_info = {
-        .index = i,
+        .index = nscreen,
         .width = (int) crtc_info->width,
         .height = (int) crtc_info->height,
         .fps = 60
         };
-        //
         tsc_offset offset;
         offset.x_offset = crtc_info->x;
         offset.y_offset = crtc_info->y;
         offset_vec.push_back(offset);
         display_info_vec.push_back(display_info);
+        if (crtc_info->width == 0){
+            break;
+        }
+        nscreen++;
     }
+    std::cout << "You Have " << nscreen << " screen(s) available\n";
+    std::cout << "select using 0 to " << nscreen - 1 << "\n";
     return display_info_vec;
     
 };
