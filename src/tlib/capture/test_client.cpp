@@ -21,14 +21,14 @@
 
 //Display         *dpy;
 GLFWwindow      *win;
-int             dsp_width = 1920;
-int             dsp_height = 1080;
+int             dsp_width;
+int             dsp_height;
 XImage			*xim;
 GLuint			texture_id;
 // these are used for scaling
 int             width;
 int             height;
-const float aspect_ratio = float(dsp_width)/dsp_height;
+float aspect_ratio;
 
 void reshapeScene(GLint width, GLint height)
 {
@@ -69,58 +69,66 @@ void Redraw() {
 /*  MAIN PROGRAM  */
 /*                */
 int main(int argc, char *argv[]) {
-    int dsp = atoi(argv[1]);
-    /* Initialize the library */
-    if (!glfwInit())
-        return -1;
-
-    /* Create a windowed mode window and its OpenGL context */
-    win = glfwCreateWindow(dsp_width, dsp_height, "Telescope", nullptr, nullptr);
-    if (!win)
-    {
-        std::cout << "Error: Failed to Create glfw Window \n";
-        glfwTerminate();
-        return -1;
+    if (argc != 4){
+        std::cout<<"Usage: ./client <display number> <width> <height> \n";
+        return 1;
     }
+    else {
+        int dsp = atoi(argv[1]);
+        dsp_width = atoi(argv[2]);
+        dsp_height = atoi(argv[3]);
+        aspect_ratio = float(dsp_width)/dsp_height;
+
+        /* Initialize the library */
+        if (!glfwInit())
+            return -1;
+
+        /* Create a windowed mode window and its OpenGL context */
+        win = glfwCreateWindow(dsp_width, dsp_height, "Telescope", nullptr, nullptr);
+        if (!win) {
+            std::cout << "Error: Failed to Create glfw Window \n";
+            glfwTerminate();
+            return -1;
+        }
 
 
-    /* Make the window's context current */
-    glfwMakeContextCurrent(win);
+        /* Make the window's context current */
+        glfwMakeContextCurrent(win);
 
 
-    //init glew
-    // glew gets the fuctions working for "new" opengl
-    if (glewInit()  != GLEW_OK){
-        std::cout << "Error: Failed to initialise Glew";
+        //init glew
+        // glew gets the fuctions working for "new" opengl
+        if (glewInit() != GLEW_OK) {
+            std::cout << "Error: Failed to initialise Glew";
+        }
+
+        // enable features
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_TEXTURE_2D);
+
+        // create a texture and set the parameters
+        // idk if the parameters are needed but its there
+        glGenTextures(1, &texture_id);
+        glBindTexture(GL_TEXTURE_2D, texture_id);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+        // define and init the cap class
+        tsc_capture_x11 cap;
+        cap.init();
+        std::vector<tsc_display> screens = cap.get_displays();
+        // std::cout << screens << "\n";
+        tsc_frame_buffer *buf = cap.alloc_frame(dsp);
+
+        while (!glfwWindowShouldClose(win)) {
+            // render and call the xshmget
+            cap.update_frame(buf);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, dsp_width, dsp_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf->buffer);
+            Redraw();
+            glfwPollEvents();
+
+        } /* while(1) */
     }
-
-    // enable features
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_TEXTURE_2D);
-
-    // create a texture and set the parameters
-    // idk if the parameters are needed but its there
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-    // define and init the cap class
-    tsc_capture_x11 cap;
-    cap.init();
-    std::vector<tsc_display> screens = cap.get_displays();
-    // std::cout << screens << "\n";
-    tsc_frame_buffer *buf = cap.alloc_frame(dsp);
-
-    while (!glfwWindowShouldClose(win)){
-        // render and call the xshmget
-        cap.update_frame(buf);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, dsp_width, dsp_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf->buffer);
-        Redraw();
-        glfwPollEvents();
-        
-    } /* while(1) */
-
 } /* int main(...) */
