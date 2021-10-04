@@ -15,8 +15,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include "capture_base.h"
-#include "capture_x11.h"
+#include "capture_base.hpp"
+#include "capture_x11.hpp"
 
 
 //Display         *dpy;

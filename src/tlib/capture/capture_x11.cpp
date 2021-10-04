@@ -2,7 +2,7 @@
 // Created by maomao on 03/10/2021.
 //
 
-#include "capture_x11.h"
+#include "capture_x11.hpp"
 
 #include <iostream>
 //x11
@@ -26,72 +26,15 @@ void tsc_capture_x11::init()
         std::cout << "cannot open display\n";
         exit(0); }
 };
-/*
-// Display *dpy;
-    // dpy = XOpenDisplay("1");
-
-    XRRScreenResources *screen;
-    XRRCrtcInfo *crtc_info;
-    // std::cout << "test \n";
-    // //0 to get the first monitor
-    screen = XRRGetScreenResources (display, root);
-    // std::cout << screen->crtcs[2] << "\n";
-    // can iterate thru this x and y is offsets
-    // width and height
-    crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[1]);
-    // std::cout << crtc_info->y << "\n";
-    // std::cout << crtc_info->outputs << "\n";
-    // std::cout << screen->modes->vSyncStart << "\n";
-    // std::cout << screen->modes->vSyncEnd << "\n";
-
-    // use Xrandr to get the screen list
-    tsc_display display_info;
-
-    display_info = {
-        .index = 0,
-        .width = (int) screen->modes->width,
-        .height = (int) screen->modes->height,
-        .fps = 60
-    };
-
-    x_offset = crtc_info->x;
-    y_offset = crtc_info->y;
-
-    display_info_vec.push_back(display_info);
-    return display_info_vec;
-    */
 
 struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 {   
-    int nscreen = XScreenCount(display) + 1;
+    int nscreen = XScreenCount(display);
     std::cout << "You Have " << nscreen << " screen(s) available\n";
-    std::cout << "select using 0 to available - 1 \n";
+    std::cout << "select using 0 to " << nscreen - 1 << "\n";
     XRRScreenResources *screen;
     XRRCrtcInfo *crtc_info;
     screen = XRRGetScreenResources (display, root);
-    // std::cout << screen->modes->hSkew<< "\n";
-    // Time	timestamp;
-    // Time	configTimestamp;
-    // int		ncrtc; shows up as 4
-    // RRCrtc	*crtcs;
-    // int		noutput; shows up as 8
-    // RROutput	*outputs;
-    // int		nmode;
-    // XRRModeInfo	*modes;
-        // modes
-    // unsigned int	width;
-    // unsigned int	height;
-    // unsigned long	dotClock;
-    // unsigned int	hSyncStart;
-    // unsigned int	hSyncEnd;
-    // unsigned int	hTotal;
-    // unsigned int	hSkew;
-    // unsigned int	vSyncStart;
-    // unsigned int	vSyncEnd;
-    // unsigned int	vTotal;
-    // char		*name;
-    // unsigned int	nameLength;
-    // XRRModeFlags	modeFlags;
     for (int i=0; i < 2; i++){
         tsc_display display_info;
         crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[i]);
@@ -115,8 +58,6 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 struct tsc_frame_buffer *tsc_capture_x11::alloc_frame(int index)
 {   tsc_frame_buffer *buf = new tsc_frame_buffer;
     shmimage *temp;
-    // std::cout << offset_vec[index].x_offset << "\n";
-    // std::cout << offset_vec[index].y_offset << "\n";
     temp = tsc_capture_x11::init_x11(display,display_info_vec[index].width,display_info_vec[index].height,offset_vec[index].x_offset,offset_vec[index].y_offset);
     buf->display = display_info_vec[index];
     // figure out how to deal with this later

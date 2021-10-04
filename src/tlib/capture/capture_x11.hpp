@@ -3,7 +3,7 @@
 //
 
 
-#include "capture_base.h"
+#include "capture_base.hpp"
 #ifndef TELESCOPE_CAPTURE_X11_H
 #define TELESCOPE_CAPTURE_X11_H
 #include <sys/shm.h>
