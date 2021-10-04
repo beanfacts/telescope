@@ -25,7 +25,7 @@ void tsc_capture_x11::init()
     if(display == nullptr) {
         std::cout << "cannot open display\n";
         exit(0); }
-};
+}
 
 struct std::vector<tsc_display> tsc_capture_x11::get_displays()
 {   
@@ -56,7 +56,7 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
     std::cout << "select using 0 to " << nscreen - 1 << "\n";
     return display_info_vec;
     
-};
+}
 
 struct tsc_frame_buffer *tsc_capture_x11::alloc_frame(int index)
 {   tsc_frame_buffer *buf = new tsc_frame_buffer;
@@ -72,7 +72,7 @@ struct tsc_frame_buffer *tsc_capture_x11::alloc_frame(int index)
     buf->context = temp;
     return buf;
     
-};
+}
 
 void tsc_capture_x11::update_frame(struct tsc_frame_buffer *frame_buffer){
     get_frame((shmimage *) frame_buffer->context);
