@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
         while (!glfwWindowShouldClose(win)) {
             // render and call the xshmget
             cap.update_frame(buf);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, dsp_width, dsp_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf->buffer);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screens[dsp].width, screens[dsp].height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buf->buffer);
             Redraw();
             glfwPollEvents();
 

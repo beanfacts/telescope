@@ -92,13 +92,13 @@ struct std::vector<tsc_display> tsc_capture_x11::get_displays()
     // char		*name;
     // unsigned int	nameLength;
     // XRRModeFlags	modeFlags;
-    for (int i=0; i < nscreen; i++){
+    for (int i=0; i < 2; i++){
         tsc_display display_info;
         crtc_info = XRRGetCrtcInfo (display, screen, screen->crtcs[i]);
         display_info = {
         .index = i,
-        .width = (int) screen->modes->width,
-        .height = (int) screen->modes->height,
+        .width = (int) crtc_info->width,
+        .height = (int) crtc_info->height,
         .fps = 60
         };
         //
