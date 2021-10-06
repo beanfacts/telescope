@@ -30,10 +30,11 @@ typedef struct {
 } _ui_data;
 
 class tsc_client_ui {
-    int default_width = 1024;
-    int default_height = 720;
 
 public:
+
+    int default_width = 1024;
+    int default_height = 720;
 
     /* Initialise and render the UI. */
     void init(int width, int height);
