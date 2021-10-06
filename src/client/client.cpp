@@ -11,7 +11,7 @@ int main(int argc, char **argv)
     tsc_client_ui ui;
     tsc_client client;
     
-    ui.init(1280, 720);
+    ui.init(ui.default_width, ui.default_height);
     ret = ui.wait_request();
     if (ret != 0) {
         std::cout << "Exiting due to close.\n";
