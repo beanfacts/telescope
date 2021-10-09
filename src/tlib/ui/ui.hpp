@@ -3,11 +3,14 @@
 #include "ui/imgui/imgui.h"
 #include "ui/imgui/backends/imgui_impl_glfw.h"
 #include "ui/imgui/backends/imgui_impl_opengl3.h"
+#include "capture/capture_base.hpp"
 
 #include <stdio.h>
 #include <stdexcept>
 #include <iostream>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
+
 
 typedef enum {
     _tsc_SETUP      = 0,    // Setting up
@@ -41,6 +44,8 @@ public:
 
     /* Loop once. */
     int refresh();
+    /* Loop once. */
+    int refresh(tsc_frame_buffer *buf);
 
     /* Wait for the user to click connect */
     int wait_request();
@@ -74,6 +79,9 @@ private:
 
     _ui_data ui_data;
 
+    float aspect_ratio = 1.7777;
+    GLuint			texture_id;
+
     void set_default_values(int width, int height);
 
     void init_window(int width, int height);
@@ -86,4 +94,11 @@ private:
 
     void cleanup();
 
+    void stream(tsc_frame_buffer *buf);
+
+    void redraw();
+
+    void reshapeScene(GLint width, GLint height);
+
+    void init_stream();
 };

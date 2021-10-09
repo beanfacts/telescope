@@ -1,6 +1,4 @@
 #include "ui.hpp"
-
-
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -13,6 +11,7 @@ void tsc_client_ui::init(int width, int height)
     set_default_values(width, height);
     init_imgui();
     init_fonts();
+    init_stream();
 }
 
 
@@ -165,6 +164,17 @@ int tsc_client_ui::refresh()
 }
 
 
+int tsc_client_ui::refresh(tsc_frame_buffer *buf) {
+    int out = glfwWindowShouldClose(window);
+    if (!out)
+    {
+        glfwPollEvents();
+        stream(buf);
+    }
+    return out;
+}
+
+
 void tsc_client_ui::cleanup()
 {
     ImGui_ImplOpenGL3_Shutdown();
@@ -173,6 +183,7 @@ void tsc_client_ui::cleanup()
     glfwDestroyWindow(window);
     glfwTerminate();
 }
+
 
 void tsc_client_ui::lock_cursor()
 {
@@ -183,8 +194,74 @@ void tsc_client_ui::lock_cursor()
     glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 }
 
+
 void tsc_client_ui::unlock_cursor()
 {
     glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
+
+
+void tsc_client_ui::stream(tsc_frame_buffer *buf) {
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, buf->display.width, buf->display.height, 0, buf->pixmap, GL_UNSIGNED_BYTE, buf->buffer);
+    redraw();
+}
+
+
+void tsc_client_ui::redraw(){
+    int width,height;
+    // evrytime we redraw the scene we get the window size and reshape accordingly
+    glfwGetWindowSize(window, &width, &height);
+    reshapeScene(width,height);
+    // clear the screen so we can draw another frame
+    glClearColor(0.3, 0.3, 0.3, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // draw a rectangle
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex2f(-1.0,1.0);
+    glTexCoord2f(1.0, 0.0); glVertex2f( 1.0,1.0);
+    glTexCoord2f(1.0, 1.0); glVertex2f( 1.0,-1.0);
+    glTexCoord2f(0.0, 1.0); glVertex2f(-1.0,-1.0);
+    glEnd();
+
+    // draw onto screen
+    glfwSwapBuffers(window);
+}
+
+
+void tsc_client_ui::reshapeScene(GLint width, GLint height) {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
+    int w = height * aspect_ratio;           // w is width adjusted for aspect ratio
+    int left = (width - w) / 2;
+    // moves the viewport around to get the screen size scaled
+    glViewport(left, 0, w, height);       // fix up the viewport to maintain aspect ratio
+    glMatrixMode(GL_MODELVIEW);
+}
+
+
+void tsc_client_ui::init_stream() {
+    //init glew
+    // glew gets the fuctions working for "new" opengl
+    if (glewInit() != GLEW_OK) {
+        std::cout << "Error: Failed to initialise Glew";
+    }
+
+    // enable features
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_TEXTURE_2D);
+
+    // create a texture and set the parameters
+    // idk if the parameters are needed but its there
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+
+}
+
